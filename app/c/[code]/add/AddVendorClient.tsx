@@ -72,7 +72,7 @@ export default function AddVendorClient({
     <main className="mx-auto min-h-screen max-w-md px-4 pb-12 pt-6">
       <Link
         href={`/c/${community.code}`}
-        className="inline-flex items-center gap-1 text-base font-semibold text-pine-600"
+        className="inline-flex items-center gap-1 text-base font-semibold text-navy-600"
       >
         ← Back to {community.name}
       </Link>
@@ -96,7 +96,7 @@ export default function AddVendorClient({
             placeholder="e.g. Mike's Plumbing, or Sarah Lee"
             maxLength={80}
             required
-            className="mt-1.5 w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+            className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
         </div>
 
@@ -113,7 +113,7 @@ export default function AddVendorClient({
                 aria-pressed={category === c.id}
                 className={`rounded-2xl border-2 p-3 text-left text-base font-semibold transition-colors ${
                   category === c.id
-                    ? 'border-pine-600 bg-pine-50 text-pine-800'
+                    ? 'border-navy-600 bg-navy-50 text-navy-800'
                     : 'border-transparent bg-white text-ink shadow-card'
                 }`}
               >
@@ -136,7 +136,7 @@ export default function AddVendorClient({
             placeholder="e.g. (555) 123-4567"
             maxLength={30}
             autoComplete="off"
-            className="mt-1.5 w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+            className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
         </div>
 
@@ -153,7 +153,7 @@ export default function AddVendorClient({
             placeholder="e.g. mike@plumbing.com"
             maxLength={120}
             autoComplete="off"
-            className="mt-1.5 w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+            className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
         </div>
 
@@ -176,12 +176,12 @@ export default function AddVendorClient({
             placeholder="e.g. Fixed our water heater the same day we called. Fair price, very kind."
             rows={4}
             maxLength={1000}
-            className="mt-1.5 w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+            className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
         </div>
 
         {error && (
-          <p role="alert" className="text-base font-medium text-red-700">
+          <p role="alert" className="text-base font-medium text-coral-700">
             {error}
           </p>
         )}
@@ -189,9 +189,9 @@ export default function AddVendorClient({
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-2xl bg-pine-600 p-4 text-lg font-bold text-white transition-colors hover:bg-pine-700 disabled:opacity-50"
+          className="w-full rounded-2xl bg-coral-600 p-4 text-lg font-bold text-white transition-colors hover:bg-coral-700 disabled:opacity-50"
         >
-          {busy ? 'Saving…' : '🤝 Add my vouch'}
+          {busy ? 'Saving…' : 'Add my vouch'}
         </button>
       </form>
 

@@ -20,7 +20,7 @@ export default function VendorCard({
     >
       <div className="flex items-start gap-3">
         <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-pine-50 text-2xl"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-2xl"
           aria-hidden="true"
         >
           {category.emoji}

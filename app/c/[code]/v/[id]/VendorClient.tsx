@@ -126,7 +126,7 @@ export default function VendorClient({
       <main className="mx-auto min-h-screen max-w-md px-4 pt-6">
         <p className="py-16 text-center text-lg text-soft">
           We couldn&apos;t find this recommendation.{' '}
-          <Link href={`/c/${community.code}`} className="font-semibold text-pine-600 underline">
+          <Link href={`/c/${community.code}`} className="font-semibold text-navy-600 underline">
             Back to {community.name}
           </Link>
         </p>
@@ -140,14 +140,14 @@ export default function VendorClient({
     <main className="mx-auto min-h-screen max-w-md px-4 pb-12 pt-6">
       <Link
         href={`/c/${community.code}`}
-        className="inline-flex items-center gap-1 text-base font-semibold text-pine-600"
+        className="inline-flex items-center gap-1 text-base font-semibold text-navy-600"
       >
         ← Back to {community.name}
       </Link>
 
       <section className="mt-4 rounded-3xl bg-white p-6 shadow-card">
         <div
-          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pine-50 text-3xl"
+          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-navy-50 text-3xl"
           aria-hidden="true"
         >
           {category.emoji}
@@ -167,13 +167,13 @@ export default function VendorClient({
             {vendor.phone && (
               <a
                 href={`tel:${vendor.phone.replace(/[^+\d]/g, '')}`}
-                className="block rounded-2xl bg-pine-600 p-4 text-center text-lg font-bold text-white transition-colors hover:bg-pine-700"
+                className="block rounded-2xl bg-navy-600 p-4 text-center text-lg font-bold text-white transition-colors hover:bg-navy-700"
               >
                 📞 Call {vendor.phone}
               </a>
             )}
             {vendor.contact && (
-              <p className="break-words rounded-2xl bg-pine-50 p-4 text-center text-base font-semibold text-pine-800">
+              <p className="break-words rounded-2xl bg-navy-50 p-4 text-center text-base font-semibold text-navy-800">
                 ✉️ {vendor.contact}
               </p>
             )}
@@ -184,7 +184,7 @@ export default function VendorClient({
       {saved && (
         <p
           role="status"
-          className="mt-4 rounded-2xl bg-pine-100 p-4 text-center text-base font-semibold text-pine-800"
+          className="mt-4 rounded-2xl bg-navy-100 p-4 text-center text-base font-semibold text-navy-800"
         >
           ✅ Thanks! Your vouch is saved.
         </p>
@@ -193,9 +193,9 @@ export default function VendorClient({
       {member && !formOpen && (
         <button
           onClick={openForm}
-          className="mt-4 w-full rounded-2xl bg-honey-500 p-4 text-lg font-bold text-ink shadow-card transition-colors hover:bg-honey-600"
+          className="mt-4 w-full rounded-2xl bg-coral-600 p-4 text-lg font-bold text-white shadow-card transition-colors hover:bg-coral-700"
         >
-          {myVouch ? '✏️ Update my vouch' : '🤝 Add my vouch'}
+          {myVouch ? 'Update my vouch' : 'Add my vouch'}
         </button>
       )}
 
@@ -221,10 +221,10 @@ export default function VendorClient({
             placeholder="e.g. On time, fair price, cleaned up after the job."
             rows={3}
             maxLength={1000}
-            className="mt-1.5 w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+            className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
           {error && (
-            <p role="alert" className="mt-2 text-base font-medium text-red-700">
+            <p role="alert" className="mt-2 text-base font-medium text-coral-700">
               {error}
             </p>
           )}
@@ -232,14 +232,14 @@ export default function VendorClient({
             <button
               type="button"
               onClick={() => setFormOpen(false)}
-              className="flex-1 rounded-2xl bg-pine-50 p-4 text-base font-bold text-pine-800 transition-colors hover:bg-pine-100"
+              className="flex-1 rounded-2xl bg-navy-50 p-4 text-base font-bold text-navy-800 transition-colors hover:bg-navy-100"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="flex-1 rounded-2xl bg-pine-600 p-4 text-base font-bold text-white transition-colors hover:bg-pine-700 disabled:opacity-50"
+              className="flex-1 rounded-2xl bg-coral-600 p-4 text-base font-bold text-white transition-colors hover:bg-coral-700 disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save my vouch'}
             </button>
@@ -258,7 +258,7 @@ export default function VendorClient({
                 <p className="font-bold text-ink">
                   {v.member_name}
                   {member && v.member_id === member.id && (
-                    <span className="ml-2 rounded-full bg-pine-100 px-2 py-0.5 text-sm font-semibold text-pine-800">
+                    <span className="ml-2 rounded-full bg-coral-100 px-2 py-0.5 text-sm font-semibold text-coral-800">
                       You
                     </span>
                   )}

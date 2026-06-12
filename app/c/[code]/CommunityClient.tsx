@@ -59,7 +59,7 @@ export default function CommunityClient({
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-28 pt-6">
       <header>
-        <Link href="/" className="text-base font-semibold text-pine-600">
+        <Link href="/" className="text-base font-semibold text-navy-600">
           🤝 Vouch
         </Link>
         <div className="mt-2 flex items-start justify-between gap-3">
@@ -69,7 +69,7 @@ export default function CommunityClient({
         </div>
         <button
           onClick={copyInvite}
-          className="mt-3 inline-flex items-center gap-2 rounded-full bg-pine-100 px-4 py-2 text-base font-semibold text-pine-800 transition-colors hover:bg-pine-200"
+          className="mt-3 inline-flex items-center gap-2 rounded-full bg-navy-100 px-4 py-2 text-base font-semibold text-navy-800 transition-colors hover:bg-navy-200"
         >
           {copied ? '✅ Invite copied!' : `📨 Invite code: ${community.code}`}
         </button>
@@ -85,7 +85,7 @@ export default function CommunityClient({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="🔍 Search by name…"
-          className="w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+          className="w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
         />
       </div>
 
@@ -99,7 +99,7 @@ export default function CommunityClient({
           aria-pressed={category === ''}
           className={`shrink-0 rounded-full px-4 py-2.5 text-base font-semibold transition-colors ${
             category === ''
-              ? 'bg-pine-700 text-white'
+              ? 'bg-navy-700 text-white'
               : 'bg-white text-ink shadow-card'
           }`}
         >
@@ -112,7 +112,7 @@ export default function CommunityClient({
             aria-pressed={category === c.id}
             className={`shrink-0 rounded-full px-4 py-2.5 text-base font-semibold transition-colors ${
               category === c.id
-                ? 'bg-pine-700 text-white'
+                ? 'bg-navy-700 text-white'
                 : 'bg-white text-ink shadow-card'
             }`}
           >
@@ -148,9 +148,9 @@ export default function CommunityClient({
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md p-4">
         <Link
           href={`/c/${community.code}/add`}
-          className="block w-full rounded-2xl bg-honey-500 p-4 text-center text-lg font-bold text-ink shadow-lift transition-colors hover:bg-honey-600"
+          className="block w-full rounded-2xl bg-coral-600 p-4 text-center text-lg font-bold text-white shadow-lift transition-colors hover:bg-coral-700"
         >
-          ➕ Recommend someone you trust
+          Recommend someone you trust
         </Link>
       </div>
 

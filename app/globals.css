@@ -7,7 +7,7 @@ html {
 }
 
 body {
-  @apply bg-cream text-ink antialiased;
+  @apply bg-paper text-ink antialiased;
   font-size: 17px;
 }
 
@@ -18,7 +18,7 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid theme('colors.pine.500');
+  outline: 3px solid theme('colors.navy.500');
   outline-offset: 2px;
   border-radius: 4px;
 }

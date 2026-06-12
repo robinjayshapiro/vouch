@@ -73,17 +73,17 @@ export default function JoinGate({
             autoComplete="name"
             maxLength={40}
             required
-            className="mt-1.5 w-full rounded-2xl border-2 border-pine-100 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-pine-500"
+            className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
           {error && (
-            <p role="alert" className="mt-2 text-base font-medium text-red-700">
+            <p role="alert" className="mt-2 text-base font-medium text-coral-700">
               {error}
             </p>
           )}
           <button
             type="submit"
             disabled={busy || !name.trim()}
-            className="mt-4 w-full rounded-2xl bg-pine-600 p-4 text-lg font-bold text-white transition-colors hover:bg-pine-700 disabled:opacity-50"
+            className="mt-4 w-full rounded-2xl bg-navy-600 p-4 text-lg font-bold text-white transition-colors hover:bg-navy-700 disabled:opacity-50"
           >
             {busy ? 'Joining…' : "Join the community"}
           </button>

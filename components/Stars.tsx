@@ -7,7 +7,7 @@ function StarIcon({ filled, size }: { filled: boolean; size: number }) {
       height={size}
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className={filled ? 'text-honey-500' : 'text-pine-100'}
+      className={filled ? 'text-gold-500' : 'text-ink/15'}
       fill="currentColor"
     >
       <path d="M12 2.5l2.95 5.98 6.6.96-4.77 4.65 1.12 6.57L12 17.56l-5.9 3.1 1.12-6.57-4.77-4.65 6.6-.96L12 2.5z" />
