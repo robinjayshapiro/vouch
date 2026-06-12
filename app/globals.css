@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-cream text-ink antialiased;
+  font-size: 17px;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 3px solid theme('colors.pine.500');
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px; /* prevents iOS auto-zoom on focus */
+}
