@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { community, member } = createCommunity(communityName, yourName);
+  const { community, member } = await createCommunity(communityName, yourName);
   return NextResponse.json({
     community: { id: community.id, name: community.name, code: community.code },
     member: { id: member.id, name: member.name, token: member.token },

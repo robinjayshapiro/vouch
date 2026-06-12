@@ -4,14 +4,14 @@ import VendorClient from './VendorClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function VendorPage({
+export default async function VendorPage({
   params,
 }: {
   params: { code: string; id: string };
 }) {
-  const community = getCommunityByCode(params.code);
+  const community = await getCommunityByCode(params.code);
   if (!community) notFound();
-  const vendor = getVendor(params.id);
+  const vendor = await getVendor(params.id);
   if (!vendor || vendor.community_id !== community.id) notFound();
   return (
     <VendorClient

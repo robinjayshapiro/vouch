@@ -7,11 +7,11 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const vendor = getVendor(params.id);
+  const vendor = await getVendor(params.id);
   if (!vendor) {
     return NextResponse.json({ error: 'Vendor not found.' }, { status: 404 });
   }
-  const vouches = listVouches(vendor.id).map((v) => ({
+  const vouches = (await listVouches(vendor.id)).map((v) => ({
     id: v.id,
     member_id: v.member_id,
     member_name: v.member_name,

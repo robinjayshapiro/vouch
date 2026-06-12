@@ -25,17 +25,35 @@ babysitters, handymen, and mechanics they would happily hire again.
 
 - [Next.js 14](https://nextjs.org/) (App Router) + TypeScript
 - [Tailwind CSS 3.4](https://tailwindcss.com/) for styling
-- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) — zero-config
-  local database stored in `data/vouch.db` (created automatically)
+- [Supabase](https://supabase.com/) (Postgres) — all access goes through
+  server-side API routes; no keys are exposed to the browser
 
 ## Getting started
 
-```bash
-npm install
-npm run dev
-```
+1. Create a `.env.local` with your Supabase project credentials:
+
+   ```
+   SUPABASE_URL=https://<your-project>.supabase.co
+   SUPABASE_ANON_KEY=<your-anon-key>
+   ```
+
+2. Run `supabase/schema.sql` in the Supabase SQL editor (one time). Tables
+   are prefixed `vouch_` so they can share a database with other projects.
+
+3. Install and run:
+
+   ```bash
+   npm install
+   npm run dev
+   ```
 
 Open http://localhost:3000, start a community, and share the invite code.
+
+## Deploying to Vercel
+
+Import the GitHub repo at https://vercel.com/new (framework auto-detects as
+Next.js) and add the two environment variables above. Every push to `master`
+redeploys automatically.
 
 ## How it works
 
@@ -54,12 +72,12 @@ with a private token, stored in `localStorage` per community
 vouching) validate the token server-side. Reading a community requires
 knowing its invite code.
 
-### Database schema
+### Database schema (see `supabase/schema.sql`)
 
-- `communities` — id, name, unique invite code
-- `members` — per-community identity (name + secret token)
-- `vendors` — name, category, phone, contact, who added them
-- `vouches` — 1–5 star rating + comment, unique per (vendor, member)
+- `vouch_communities` — id, name, unique invite code
+- `vouch_members` — per-community identity (name + secret token)
+- `vouch_vendors` — name, category, phone, contact, who added them
+- `vouch_vouches` — 1–5 star rating + comment, unique per (vendor, member)
 
 ## Roadmap ideas
 
@@ -67,4 +85,3 @@ knowing its invite code.
 - Photos on vouches
 - "I hired them" follow-ups and job-cost ranges
 - Magic-link auth for cross-device identity
-- Hosted deployment (swap SQLite for Postgres/Supabase)

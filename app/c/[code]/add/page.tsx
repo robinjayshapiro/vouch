@@ -4,12 +4,12 @@ import AddVendorClient from './AddVendorClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function AddVendorPage({
+export default async function AddVendorPage({
   params,
 }: {
   params: { code: string };
 }) {
-  const community = getCommunityByCode(params.code);
+  const community = await getCommunityByCode(params.code);
   if (!community) notFound();
   return (
     <AddVendorClient

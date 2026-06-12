@@ -7,7 +7,7 @@ export async function POST(
   request: Request,
   { params }: { params: { code: string } }
 ) {
-  const community = getCommunityByCode(params.code);
+  const community = await getCommunityByCode(params.code);
   if (!community) {
     return NextResponse.json(
       { error: 'We could not find a community with that code. Double-check it and try again.' },
@@ -30,7 +30,7 @@ export async function POST(
     );
   }
 
-  const member = joinCommunity(community.id, name);
+  const member = await joinCommunity(community.id, name);
   return NextResponse.json({
     community: { id: community.id, name: community.name, code: community.code },
     member: { id: member.id, name: member.name, token: member.token },

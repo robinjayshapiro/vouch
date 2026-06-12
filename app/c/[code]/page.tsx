@@ -4,12 +4,12 @@ import CommunityClient from './CommunityClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function CommunityPage({
+export default async function CommunityPage({
   params,
 }: {
   params: { code: string };
 }) {
-  const community = getCommunityByCode(params.code);
+  const community = await getCommunityByCode(params.code);
   if (!community) notFound();
   return (
     <CommunityClient

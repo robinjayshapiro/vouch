@@ -13,13 +13,13 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code') ?? '';
-  const community = getCommunityByCode(code);
+  const community = await getCommunityByCode(code);
   if (!community) {
     return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
   }
   const category = url.searchParams.get('category') ?? undefined;
   const q = (url.searchParams.get('q') ?? '').trim() || undefined;
-  const vendors = listVendors(community.id, { category, q });
+  const vendors = await listVendors(community.id, { category, q });
   return NextResponse.json({ vendors });
 }
 
@@ -40,11 +40,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  const community = getCommunityByCode(body.code ?? '');
+  const community = await getCommunityByCode(body.code ?? '');
   if (!community) {
     return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
   }
-  const member = getMemberByToken(community.id, body.token ?? '');
+  const member = await getMemberByToken(community.id, body.token ?? '');
   if (!member) {
     return NextResponse.json(
       { error: 'We could not verify you. Try rejoining the community.' },
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   const contact = (body.contact ?? '').trim().slice(0, 120) || null;
   const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
 
-  const vendor = createVendor({
+  const vendor = await createVendor({
     communityId: community.id,
     name,
     category: body.category,
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     contact,
     addedBy: member.id,
   });
-  upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+  await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
 
   return NextResponse.json({ vendor });
 }
