@@ -51,7 +51,7 @@ Open http://localhost:3000, start a community, and share the invite code.
 
 ## Deploying to Vercel
 
-Import the GitHub repo at https://vercel.com/new (framework auto-detects as
+Connect the GitHub repo in the Vercel dashboard (framework auto-detects as
 Next.js) and add the two environment variables above. Every push to `master`
 redeploys automatically.
 
