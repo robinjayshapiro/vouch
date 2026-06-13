@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { StoredMember } from '@/types';
 import { getStoredMember } from '@/lib/identity';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES_BY_LABEL } from '@/lib/categories';
 import { StarPicker } from '@/components/Stars';
 import JoinGate from '@/components/JoinGate';
 
@@ -112,7 +112,7 @@ export default function AddVendorClient({
             What kind of help do they provide?
           </legend>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            {CATEGORIES.map((c) => (
+            {CATEGORIES_BY_LABEL.map((c) => (
               <button
                 key={c.id}
                 type="button"

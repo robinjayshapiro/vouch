@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { StoredMember, VendorWithStats } from '@/types';
 import { getStoredMember } from '@/lib/identity';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES_BY_LABEL } from '@/lib/categories';
 import JoinGate from '@/components/JoinGate';
 import VendorCard from '@/components/VendorCard';
 
@@ -102,7 +102,7 @@ export default function CommunityClient({
           }`}
         >
           <option value="">All categories</option>
-          {CATEGORIES.map((c) => (
+          {CATEGORIES_BY_LABEL.map((c) => (
             <option key={c.id} value={c.id}>
               {c.emoji} {c.label}
             </option>

@@ -43,6 +43,15 @@ export const CATEGORIES: Category[] = [
   { id: 'other', label: 'Something Else', emoji: '⭐' },
 ];
 
+// For the picker and filter dropdown: alphabetical by label, with the
+// catch-all pinned to the bottom so "Something Else" never floats mid-list.
+export const CATEGORIES_BY_LABEL: Category[] = [
+  ...CATEGORIES.filter((c) => c.id !== 'other').sort((a, b) =>
+    a.label.localeCompare(b.label)
+  ),
+  ...CATEGORIES.filter((c) => c.id === 'other'),
+];
+
 const byId = new Map(CATEGORIES.map((c) => [c.id, c]));
 
 export function getCategory(id: string): Category {
