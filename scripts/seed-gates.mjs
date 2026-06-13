@@ -3,6 +3,7 @@
 // Run: node scripts/seed-gates.mjs
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
+import { mapType } from './type-map.mjs';
 
 const env = Object.fromEntries(
   readFileSync('.env.local', 'utf8')
@@ -14,26 +15,7 @@ const db = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
 
 const COMMUNITY = { name: 'Gates Ridge Civic Association', code: 'GATES2' };
 
-// Map spreadsheet "Type" values onto Vouch categories.
-const TYPE_MAP = [
-  [/plumb/i, 'plumbing'],
-  [/electric/i, 'electrical'],
-  [/hvac|boiler|generator|propane|insulation|water filtration/i, 'hvac'],
-  [/handyman|grout|contractor|garage door|shower door|closet|driveway|mason|chimney|fireplace|outdoor kitche|tennis|architect/i, 'handyman'],
-  [/clean|power wash|gutter|vent|sanitation/i, 'cleaning'],
-  [/landscap|tree|sprinkler|snow|lawn|christmas lights|exteriror lights|pool/i, 'landscaping'],
-  [/roof/i, 'roofing'],
-  [/paint/i, 'painting'],
-  [/exterminator|pest|mosquito|animal|mold/i, 'pest'],
-  [/appliance|dryer|repair maintenance/i, 'appliance'],
-  [/babysit|child/i, 'childcare'],
-  [/pet/i, 'petcare'],
-  [/mechanic|car detailer|car lease|airport car/i, 'auto'],
-  [/moving|hauling|shrink wrap|unwrapping/i, 'moving'],
-  [/av|sonos|camera|tech|computer/i, 'tech'],
-];
-const toCategory = (type) =>
-  (TYPE_MAP.find(([re]) => re.test(type ?? '')) ?? [null, 'other'])[1];
+const toCategory = mapType;
 
 const digits = (p) => (p ?? '').replace(/\D/g, '').slice(-10);
 
