@@ -13,14 +13,19 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code') ?? '';
-  const community = await getCommunityByCode(code);
-  if (!community) {
-    return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
+  try {
+    const community = await getCommunityByCode(code);
+    if (!community) {
+      return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
+    }
+    const category = url.searchParams.get('category') ?? undefined;
+    const q = (url.searchParams.get('q') ?? '').trim() || undefined;
+    const vendors = await listVendors(community.id, { category, q });
+    return NextResponse.json({ vendors });
+  } catch (err) {
+    console.error('GET /api/vendors error:', err);
+    return NextResponse.json({ error: 'Could not load vendors. Please try again.' }, { status: 500 });
   }
-  const category = url.searchParams.get('category') ?? undefined;
-  const q = (url.searchParams.get('q') ?? '').trim() || undefined;
-  const vendors = await listVendors(community.id, { category, q });
-  return NextResponse.json({ vendors });
 }
 
 export async function POST(request: Request) {
@@ -38,18 +43,6 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
-  }
-
-  const community = await getCommunityByCode(body.code ?? '');
-  if (!community) {
-    return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
-  }
-  const member = await getMemberByToken(community.id, body.token ?? '');
-  if (!member) {
-    return NextResponse.json(
-      { error: 'We could not verify you. Try rejoining the community.' },
-      { status: 401 }
-    );
   }
 
   const name = (body.name ?? '').trim();
@@ -70,19 +63,36 @@ export async function POST(request: Request) {
     );
   }
 
-  const phone = (body.phone ?? '').trim().slice(0, 30) || null;
-  const contact = (body.contact ?? '').trim().slice(0, 120) || null;
-  const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
+  try {
+    const community = await getCommunityByCode(body.code ?? '');
+    if (!community) {
+      return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
+    }
+    const member = await getMemberByToken(community.id, body.token ?? '');
+    if (!member) {
+      return NextResponse.json(
+        { error: 'We could not verify you. Try rejoining the community.' },
+        { status: 401 }
+      );
+    }
 
-  const vendor = await createVendor({
-    communityId: community.id,
-    name,
-    category: body.category,
-    phone,
-    contact,
-    addedBy: member.id,
-  });
-  await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+    const phone = (body.phone ?? '').trim().slice(0, 30) || null;
+    const contact = (body.contact ?? '').trim().slice(0, 120) || null;
+    const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
 
-  return NextResponse.json({ vendor });
+    const vendor = await createVendor({
+      communityId: community.id,
+      name,
+      category: body.category,
+      phone,
+      contact,
+      addedBy: member.id,
+    });
+    await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+
+    return NextResponse.json({ vendor });
+  } catch (err) {
+    console.error('POST /api/vendors error:', err);
+    return NextResponse.json({ error: 'Could not save vendor. Please try again.' }, { status: 500 });
+  }
 }

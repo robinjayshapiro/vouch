@@ -27,9 +27,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const { community, member } = await createCommunity(communityName, yourName);
-  return NextResponse.json({
-    community: { id: community.id, name: community.name, code: community.code },
-    member: { id: member.id, name: member.name, token: member.token },
-  });
+  try {
+    const { community, member } = await createCommunity(communityName, yourName);
+    return NextResponse.json({
+      community: { id: community.id, name: community.name, code: community.code },
+      member: { id: member.id, name: member.name, token: member.token },
+    });
+  } catch (err) {
+    console.error('POST /api/communities error:', err);
+    return NextResponse.json({ error: 'Could not create community. Please try again.' }, { status: 500 });
+  }
 }

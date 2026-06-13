@@ -17,21 +17,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  const community = await getCommunityByCode(body.code ?? '');
-  if (!community) {
-    return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
-  }
-  const member = await getMemberByToken(community.id, body.token ?? '');
-  if (!member) {
-    return NextResponse.json(
-      { error: 'We could not verify you. Try rejoining the community.' },
-      { status: 401 }
-    );
-  }
-  const vendor = await getVendor(body.vendorId ?? '');
-  if (!vendor || vendor.community_id !== community.id) {
-    return NextResponse.json({ error: 'Vendor not found.' }, { status: 404 });
-  }
   const rating = Number(body.rating);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     return NextResponse.json(
@@ -39,8 +24,29 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
 
-  await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
-  return NextResponse.json({ ok: true });
+  try {
+    const community = await getCommunityByCode(body.code ?? '');
+    if (!community) {
+      return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
+    }
+    const member = await getMemberByToken(community.id, body.token ?? '');
+    if (!member) {
+      return NextResponse.json(
+        { error: 'We could not verify you. Try rejoining the community.' },
+        { status: 401 }
+      );
+    }
+    const vendor = await getVendor(body.vendorId ?? '');
+    if (!vendor || vendor.community_id !== community.id) {
+      return NextResponse.json({ error: 'Vendor not found.' }, { status: 404 });
+    }
+    const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
+
+    await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/vouches error:', err);
+    return NextResponse.json({ error: 'Could not save vouch. Please try again.' }, { status: 500 });
+  }
 }
