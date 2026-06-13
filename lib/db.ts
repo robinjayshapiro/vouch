@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import type {
   Community,
   Member,
+  MemberSuggestion,
   Vendor,
   VendorWithStats,
   VouchWithMember,
@@ -79,11 +80,17 @@ export async function getCommunityByCode(
 
 export async function joinCommunity(
   communityId: string,
-  name: string
+  name: string,
+  phone?: string | null
 ): Promise<Member> {
   const { data, error } = await getClient()
     .from('vouch_members')
-    .insert({ community_id: communityId, name, token: randomUUID() })
+    .insert({
+      community_id: communityId,
+      name,
+      token: randomUUID(),
+      phone: phone?.trim() || null,
+    })
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -103,6 +110,152 @@ export async function getMemberByToken(
     .maybeSingle();
   if (error) throw new Error(error.message);
   return (data as Member | null) ?? undefined;
+}
+
+export async function getMemberById(id: string): Promise<Member | undefined> {
+  if (!id) return undefined;
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .select()
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return undefined; // invalid uuid reads as "not found"
+  return (data as Member | null) ?? undefined;
+}
+
+export async function findMemberByPhone(
+  communityId: string,
+  phone: string
+): Promise<Member | undefined> {
+  const digits = phoneDigits(phone);
+  if (digits.length < 7) return undefined;
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .select()
+    .eq('community_id', communityId)
+    .not('phone', 'is', null);
+  if (error) throw new Error(error.message);
+  return (data as Member[]).find((m) => phoneDigits(m.phone) === digits);
+}
+
+// Name-claim onboarding: surface existing members who might be the person
+// joining. Exact full-name matches rank ahead of first-name matches. Never
+// exposes tokens or phone values — only enough to recognize oneself.
+export async function findMembersByName(
+  communityId: string,
+  name: string
+): Promise<MemberSuggestion[]> {
+  const needle = name.trim().toLowerCase();
+  if (!needle) return [];
+  const first = needle.split(/\s+/)[0];
+
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .select('id, name, phone, vouch_vouches(member_id)')
+    .eq('community_id', communityId);
+  if (error) throw new Error(error.message);
+
+  type Row = { id: string; name: string; phone: string | null; vouch_vouches: unknown[] };
+  const scored = (data as Row[])
+    .map((m) => {
+      const full = m.name.trim().toLowerCase();
+      const memberFirst = full.split(/\s+/)[0];
+      let rank = -1;
+      if (full === needle) rank = 0;
+      else if (memberFirst === first) rank = 1;
+      return { m, rank };
+    })
+    .filter((x) => x.rank >= 0)
+    .sort((a, b) => a.rank - b.rank || a.m.name.localeCompare(b.m.name))
+    .slice(0, 3);
+
+  return scored.map(({ m }) => ({
+    id: m.id,
+    name: m.name,
+    vouchCount: m.vouch_vouches.length,
+    hasPhone: !!m.phone,
+  }));
+}
+
+// First-come, one-shot: only sets the phone while it's still null, so the
+// first person to claim a seeded member owns it. Returns whether it applied.
+export async function setMemberPhone(
+  memberId: string,
+  phone: string
+): Promise<boolean> {
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .update({ phone: phone.trim() })
+    .eq('id', memberId)
+    .is('phone', null)
+    .select('id');
+  if (error) throw new Error(error.message);
+  return (data as unknown[]).length > 0;
+}
+
+export async function countActiveLoginTokens(memberId: string): Promise<number> {
+  const { count, error } = await getClient()
+    .from('vouch_login_tokens')
+    .select('id', { count: 'exact', head: true })
+    .eq('member_id', memberId)
+    .is('used_at', null)
+    .gt('expires_at', new Date().toISOString());
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export async function createLoginToken(
+  memberId: string,
+  ttlMinutes: number
+): Promise<string> {
+  const expires = new Date(Date.now() + ttlMinutes * 60_000).toISOString();
+  const { data, error } = await getClient()
+    .from('vouch_login_tokens')
+    .insert({ member_id: memberId, token: randomUUID(), expires_at: expires })
+    .select('token')
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { token: string }).token;
+}
+
+// Single-use redemption: marks the token used and returns the member plus the
+// community code/name so the claim page can sign in and redirect.
+export async function redeemLoginToken(token: string): Promise<
+  | { member: Member; community: { code: string; name: string } }
+  | undefined
+> {
+  if (!token) return undefined;
+  const db = getClient();
+  const { data, error } = await db
+    .from('vouch_login_tokens')
+    .select('id, member_id, used_at, expires_at')
+    .eq('token', token)
+    .maybeSingle();
+  if (error) return undefined;
+  const row = data as
+    | { id: string; member_id: string; used_at: string | null; expires_at: string }
+    | null;
+  if (!row || row.used_at || new Date(row.expires_at) < new Date()) return undefined;
+
+  // Mark used; guard against a concurrent redemption by filtering on used_at null.
+  const { data: claimed, error: useErr } = await db
+    .from('vouch_login_tokens')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', row.id)
+    .is('used_at', null)
+    .select('id');
+  if (useErr) throw new Error(useErr.message);
+  if ((claimed as unknown[]).length === 0) return undefined; // lost the race
+
+  const member = await getMemberById(row.member_id);
+  if (!member) return undefined;
+  const { data: comm, error: cErr } = await db
+    .from('vouch_communities')
+    .select('code, name')
+    .eq('id', member.community_id)
+    .single();
+  if (cErr) throw new Error(cErr.message);
+  return { member, community: comm as { code: string; name: string } };
 }
 
 export async function getCommunityStats(communityId: string): Promise<{

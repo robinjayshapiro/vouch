@@ -10,7 +10,16 @@ export interface Member {
   community_id: string;
   name: string;
   token: string;
+  phone: string | null;
   created_at: string;
+}
+
+/** A possible existing member surfaced during name-claim onboarding. Never carries token/phone. */
+export interface MemberSuggestion {
+  id: string;
+  name: string;
+  vouchCount: number;
+  hasPhone: boolean;
 }
 
 /** What the client stores in localStorage — never includes other members' tokens. */
