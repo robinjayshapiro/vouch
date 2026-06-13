@@ -7,6 +7,7 @@ import { getStoredMember } from '@/lib/identity';
 import { CATEGORIES_BY_LABEL } from '@/lib/categories';
 import JoinGate from '@/components/JoinGate';
 import VendorCard from '@/components/VendorCard';
+import ModerationPanel from './ModerationPanel';
 
 export default function CommunityClient({
   community,
@@ -20,18 +21,41 @@ export default function CommunityClient({
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [copied, setCopied] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [modOpen, setModOpen] = useState(false);
 
   useEffect(() => {
     setMember(getStoredMember(community.code));
     setCheckedIdentity(true);
   }, [community.code]);
 
+  // Ask the server whether the signed-in member is an admin (and how many edits
+  // await review) so we can show the moderation entry.
+  const refreshAdminState = useCallback(
+    async (token: string) => {
+      const res = await fetch(`/api/communities/${community.code}?token=${token}`, {
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsAdmin(data.viewerRole === 'admin');
+        setPendingCount(data.pendingEdits ?? 0);
+      }
+    },
+    [community.code]
+  );
+
+  useEffect(() => {
+    if (member?.token) refreshAdminState(member.token);
+  }, [member?.token, refreshAdminState]);
+
   const fetchVendors = useCallback(async () => {
     const params = new URLSearchParams({ code: community.code });
     if (category) params.set('category', category);
     if (q.trim()) params.set('q', q.trim());
     try {
-      const res = await fetch(`/api/vendors?${params.toString()}`);
+      const res = await fetch(`/api/vendors?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) setVendors(data.vendors);
     } finally {
@@ -67,13 +91,40 @@ export default function CommunityClient({
             {community.name}
           </h1>
         </div>
-        <button
-          onClick={copyInvite}
-          className="mt-3 inline-flex items-center gap-2 rounded-full bg-navy-100 px-4 py-2 text-base font-semibold text-navy-800 transition-colors hover:bg-navy-200"
-        >
-          {copied ? '✅ Invite copied!' : `📨 Invite code: ${community.code}`}
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            onClick={copyInvite}
+            className="inline-flex items-center gap-2 rounded-full bg-navy-100 px-4 py-2 text-base font-semibold text-navy-800 transition-colors hover:bg-navy-200"
+          >
+            {copied ? '✅ Invite copied!' : `📨 Invite code: ${community.code}`}
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setModOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-coral-100 px-4 py-2 text-base font-semibold text-coral-800 transition-colors hover:bg-coral-200"
+            >
+              🛠️ Review changes
+              {pendingCount > 0 && (
+                <span className="rounded-full bg-coral-600 px-2 text-sm font-bold text-white">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
       </header>
+
+      {modOpen && member && (
+        <ModerationPanel
+          code={community.code}
+          token={member.token}
+          onClose={() => setModOpen(false)}
+          onReviewed={() => {
+            refreshAdminState(member.token);
+            fetchVendors();
+          }}
+        />
+      )}
 
       <div className="mt-5">
         <label htmlFor="vendor-search" className="sr-only">

@@ -4,11 +4,13 @@ import type {
   Community,
   Member,
   MemberSuggestion,
+  PendingVendorEdit,
   Vendor,
+  VendorEditChanges,
   VendorWithStats,
   VouchWithMember,
 } from '@/types';
-import { getCategory } from '@/lib/categories';
+import { getCategory, isValidCategory } from '@/lib/categories';
 
 // Phones are the natural dedup key ("here's his number") — compare on the
 // last 10 digits so formatting and country-code prefixes don't matter.
@@ -63,6 +65,9 @@ export async function createCommunity(
   }
   if (!community) throw new Error('Could not generate a unique invite code.');
   const member = await joinCommunity(community.id, creatorName);
+  // The creator runs the community — make them an admin.
+  await db.from('vouch_members').update({ role: 'admin' }).eq('id', member.id);
+  member.role = 'admin';
   return { community, member };
 }
 
@@ -391,6 +396,131 @@ export async function createVendor(input: {
     .single();
   if (error) throw new Error(error.message);
   return data as Vendor;
+}
+
+// Whitelist editable fields so a `changes` patch can never touch ids/ownership.
+function sanitizeVendorChanges(changes: VendorEditChanges): VendorEditChanges {
+  const out: VendorEditChanges = {};
+  if (typeof changes.name === 'string' && changes.name.trim())
+    out.name = changes.name.trim().slice(0, 80);
+  if (typeof changes.category === 'string' && isValidCategory(changes.category))
+    out.category = changes.category;
+  if ('phone' in changes)
+    out.phone = (changes.phone ?? '').toString().trim().slice(0, 30) || null;
+  if ('contact' in changes)
+    out.contact = (changes.contact ?? '').toString().trim().slice(0, 120) || null;
+  return out;
+}
+
+export async function updateVendorFields(
+  vendorId: string,
+  changes: VendorEditChanges
+): Promise<void> {
+  const patch = sanitizeVendorChanges(changes);
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await getClient()
+    .from('vouch_vendors')
+    .update(patch)
+    .eq('id', vendorId);
+  if (error) throw new Error(error.message);
+}
+
+export async function proposeVendorEdit(input: {
+  communityId: string;
+  vendorId: string;
+  proposedBy: string;
+  changes: VendorEditChanges;
+}): Promise<void> {
+  const patch = sanitizeVendorChanges(input.changes);
+  if (Object.keys(patch).length === 0) throw new Error('No changes to propose.');
+  const { error } = await getClient().from('vouch_vendor_edits').insert({
+    community_id: input.communityId,
+    vendor_id: input.vendorId,
+    proposed_by: input.proposedBy,
+    changes: patch,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function countPendingEdits(communityId: string): Promise<number> {
+  const { count, error } = await getClient()
+    .from('vouch_vendor_edits')
+    .select('id', { count: 'exact', head: true })
+    .eq('community_id', communityId)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export async function listPendingEdits(
+  communityId: string
+): Promise<PendingVendorEdit[]> {
+  const { data, error } = await getClient()
+    .from('vouch_vendor_edits')
+    .select(
+      'id, vendor_id, changes, created_at, vouch_members!vouch_vendor_edits_proposed_by_fkey(name), vouch_vendors(name, category, phone, contact)'
+    )
+    .eq('community_id', communityId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  type Row = {
+    id: string;
+    vendor_id: string;
+    changes: VendorEditChanges;
+    created_at: string;
+    vouch_members: { name: string } | null;
+    vouch_vendors: { name: string; category: string; phone: string | null; contact: string | null } | null;
+  };
+  return (data as unknown as Row[])
+    .filter((r) => r.vouch_vendors) // skip orphans (vendor deleted)
+    .map((r) => ({
+      id: r.id,
+      vendor_id: r.vendor_id,
+      proposed_by_name: r.vouch_members?.name ?? 'Someone',
+      created_at: r.created_at,
+      changes: r.changes,
+      current: r.vouch_vendors!,
+    }));
+}
+
+// Approve (apply the patch to the vendor) or reject a pending edit. Returns the
+// affected vendor id so the caller can refresh. Guards on status='pending' so a
+// double review can't double-apply.
+export async function reviewVendorEdit(
+  editId: string,
+  communityId: string,
+  reviewerId: string,
+  action: 'approve' | 'reject'
+): Promise<boolean> {
+  const db = getClient();
+  const { data, error } = await db
+    .from('vouch_vendor_edits')
+    .select('id, vendor_id, changes, status')
+    .eq('id', editId)
+    .eq('community_id', communityId)
+    .maybeSingle();
+  if (error) return false;
+  const row = data as
+    | { id: string; vendor_id: string; changes: VendorEditChanges; status: string }
+    | null;
+  if (!row || row.status !== 'pending') return false;
+
+  const { data: claimed, error: cErr } = await db
+    .from('vouch_vendor_edits')
+    .update({
+      status: action === 'approve' ? 'approved' : 'rejected',
+      reviewed_by: reviewerId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', row.id)
+    .eq('status', 'pending')
+    .select('id');
+  if (cErr) throw new Error(cErr.message);
+  if ((claimed as unknown[]).length === 0) return false; // lost the race
+
+  if (action === 'approve') await updateVendorFields(row.vendor_id, row.changes);
+  return true;
 }
 
 export async function listVouches(vendorId: string): Promise<VouchWithMember[]> {
