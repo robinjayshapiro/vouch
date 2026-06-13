@@ -113,13 +113,29 @@ export default function JoinGate({
     setBusy(true);
     setError('');
     try {
-      await fetch('/api/auth/claim-by-name', {
+      const res = await fetch('/api/auth/claim-by-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, memberId: claiming.id, phone: claimPhone.trim() }),
       });
-      setSentMessage(`We texted a sign-in link to confirm you're ${claiming.name.split(' ')[0]}. Tap it on your phone to finish.`);
-      setMode('sent');
+      const data = await res.json();
+      // Someone already claimed this identity — verify by text instead.
+      if (res.status === 409 && data.alreadyClaimed) {
+        await fetch('/api/auth/sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, memberId: claiming.id }),
+        });
+        setSentMessage(`${claiming.name.split(' ')[0]} is already set up. We texted the number on file a sign-in link.`);
+        setMode('sent');
+        return;
+      }
+      if (!res.ok || !data.member) throw new Error(data.error ?? 'Something went wrong.');
+      // Signed in directly on this device.
+      storeMember(code, data.member);
+      onJoined(data.member);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setBusy(false);
     }
@@ -264,11 +280,13 @@ export default function JoinGate({
           <>
             <p className="text-4xl" aria-hidden="true">📱</p>
             <h2 id="join-title" className="mt-2 text-2xl font-extrabold text-ink">
-              Let&apos;s confirm it&apos;s you
+              Welcome back, {claiming.name.split(' ')[0]}!
             </h2>
             <p className="mt-1 text-lg text-soft">
-              Add your mobile number and we&apos;ll text a link to finish claiming{' '}
-              <span className="font-semibold text-ink">{claiming.name}</span>.
+              Add your mobile number to claim{' '}
+              <span className="font-semibold text-ink">{claiming.name}</span> and
+              pick up your recommendations. We&apos;ll use it to sign you in on
+              other devices.
             </p>
             <form onSubmit={submitClaimPhone} className="mt-5">
               <label htmlFor="claim-phone-in" className="block text-base font-semibold text-ink">
@@ -290,7 +308,7 @@ export default function JoinGate({
                 disabled={busy || !claimPhone.trim()}
                 className="mt-4 w-full rounded-2xl bg-coral-600 p-4 text-lg font-bold text-white transition-colors hover:bg-coral-700 disabled:opacity-50"
               >
-                {busy ? 'Texting…' : 'Text me the link'}
+                {busy ? 'One sec…' : 'This is me — take me in'}
               </button>
             </form>
             <button
