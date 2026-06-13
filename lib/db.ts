@@ -7,6 +7,13 @@ import type {
   VendorWithStats,
   VouchWithMember,
 } from '@/types';
+import { getCategory } from '@/lib/categories';
+
+// Phones are the natural dedup key ("here's his number") — compare on the
+// last 10 digits so formatting and country-code prefixes don't matter.
+export function phoneDigits(phone: string | null | undefined): string {
+  return (phone ?? '').replace(/\D/g, '').slice(-10);
+}
 
 let client: SupabaseClient | null = null;
 
@@ -135,11 +142,15 @@ export async function listVendors(
   if (error) throw new Error(error.message);
 
   const needle = opts.q?.toLowerCase();
+  const needleDigits = (opts.q ?? '').replace(/\D/g, '');
   const vendors = (data as VendorRow[])
     .filter(
       (v) =>
         !needle ||
         v.name.toLowerCase().includes(needle) ||
+        getCategory(v.category).label.toLowerCase().includes(needle) ||
+        (needleDigits.length >= 3 &&
+          phoneDigits(v.phone).includes(needleDigits)) ||
         v.vouch_vouches.some((w) => w.comment?.toLowerCase().includes(needle))
     )
     .map(({ vouch_vouches, ...vendor }): VendorWithStats => {
@@ -175,6 +186,21 @@ export async function getVendor(id: string): Promise<Vendor | undefined> {
   // An invalid uuid in the URL should read as "not found", not a server error.
   if (error) return undefined;
   return (data as Vendor | null) ?? undefined;
+}
+
+export async function findVendorByPhone(
+  communityId: string,
+  phone: string
+): Promise<Vendor | undefined> {
+  const digits = phoneDigits(phone);
+  if (digits.length < 7) return undefined; // too short to be a reliable match
+  const { data, error } = await getClient()
+    .from('vouch_vendors')
+    .select()
+    .eq('community_id', communityId)
+    .not('phone', 'is', null);
+  if (error) throw new Error(error.message);
+  return (data as Vendor[]).find((v) => phoneDigits(v.phone) === digits);
 }
 
 export async function createVendor(input: {

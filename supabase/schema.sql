@@ -46,3 +46,10 @@ create table if not exists vouch_vouches (
 );
 
 create index if not exists vouch_vouches_vendor_idx on vouch_vouches(vendor_id);
+
+-- All access is enforced in API routes (token validation).
+-- Disable RLS so the anon key can read/write from server-side routes.
+alter table vouch_communities disable row level security;
+alter table vouch_members     disable row level security;
+alter table vouch_vendors     disable row level security;
+alter table vouch_vouches     disable row level security;

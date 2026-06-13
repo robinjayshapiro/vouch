@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   createVendor,
+  findVendorByPhone,
   getCommunityByCode,
   getMemberByToken,
   listVendors,
@@ -79,6 +80,19 @@ export async function POST(request: Request) {
     const phone = (body.phone ?? '').trim().slice(0, 30) || null;
     const contact = (body.contact ?? '').trim().slice(0, 120) || null;
     const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
+
+    if (phone) {
+      const existing = await findVendorByPhone(community.id, phone);
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: `${existing.name} is already in your directory with that phone number.`,
+            existing: { id: existing.id, name: existing.name },
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     const vendor = await createVendor({
       communityId: community.id,

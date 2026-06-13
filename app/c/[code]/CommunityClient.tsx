@@ -77,48 +77,37 @@ export default function CommunityClient({
 
       <div className="mt-5">
         <label htmlFor="vendor-search" className="sr-only">
-          Search for a pro
+          Search by name, category, or phone number
         </label>
         <input
           id="vendor-search"
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="🔍 Search by name…"
+          placeholder="🔍 Search name, category, or phone…"
           className="w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
         />
       </div>
 
-      <div
-        className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-2"
-        role="group"
-        aria-label="Filter by category"
-      >
-        <button
-          onClick={() => setCategory('')}
-          aria-pressed={category === ''}
-          className={`shrink-0 rounded-full px-4 py-2.5 text-base font-semibold transition-colors ${
-            category === ''
-              ? 'bg-navy-700 text-white'
-              : 'bg-white text-ink shadow-card'
+      <div className="mt-3">
+        <label htmlFor="category-filter" className="sr-only">
+          Filter by category
+        </label>
+        <select
+          id="category-filter"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className={`w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg focus:border-navy-500 ${
+            category ? 'font-semibold text-navy-800' : 'text-ink'
           }`}
         >
-          All
-        </button>
-        {CATEGORIES.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setCategory(category === c.id ? '' : c.id)}
-            aria-pressed={category === c.id}
-            className={`shrink-0 rounded-full px-4 py-2.5 text-base font-semibold transition-colors ${
-              category === c.id
-                ? 'bg-navy-700 text-white'
-                : 'bg-white text-ink shadow-card'
-            }`}
-          >
-            {c.emoji} {c.label}
-          </button>
-        ))}
+          <option value="">All categories</option>
+          {CATEGORIES.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.emoji} {c.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <section className="mt-4 flex flex-col gap-3" aria-live="polite">

@@ -25,6 +25,7 @@ export default function AddVendorClient({
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [duplicate, setDuplicate] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     setMember(getStoredMember(community.code));
@@ -44,6 +45,7 @@ export default function AddVendorClient({
     }
     setBusy(true);
     setError('');
+    setDuplicate(null);
     try {
       const res = await fetch('/api/vendors', {
         method: 'POST',
@@ -60,6 +62,11 @@ export default function AddVendorClient({
         }),
       });
       const data = await res.json();
+      if (res.status === 409 && data.existing) {
+        setDuplicate(data.existing);
+        setBusy(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong.');
       router.push(`/c/${community.code}/v/${data.vendor.id}`);
     } catch (err) {
@@ -126,8 +133,12 @@ export default function AddVendorClient({
         <div>
           <label htmlFor="vendor-phone" className="block text-lg font-semibold text-ink">
             Phone number{' '}
-            <span className="font-normal text-soft">(optional)</span>
+            <span className="font-normal text-soft">(recommended)</span>
           </label>
+          <p className="mt-0.5 text-base text-soft">
+            The number you&apos;d text a neighbor — it keeps the directory free
+            of duplicates.
+          </p>
           <input
             id="vendor-phone"
             type="tel"
@@ -179,6 +190,24 @@ export default function AddVendorClient({
             className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
           />
         </div>
+
+        {duplicate && (
+          <div
+            role="alert"
+            className="rounded-2xl border-2 border-navy-200 bg-navy-50 p-4"
+          >
+            <p className="text-base font-semibold text-navy-800">
+              Good news — <span className="font-bold">{duplicate.name}</span> is
+              already in your directory with that phone number.
+            </p>
+            <Link
+              href={`/c/${community.code}/v/${duplicate.id}`}
+              className="mt-3 block rounded-2xl bg-coral-600 p-3 text-center text-base font-bold text-white transition-colors hover:bg-coral-700"
+            >
+              Add your vouch to {duplicate.name} →
+            </Link>
+          </div>
+        )}
 
         {error && (
           <p role="alert" className="text-base font-medium text-coral-700">
