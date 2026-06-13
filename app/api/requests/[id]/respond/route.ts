@@ -1,28 +1,25 @@
 import { NextResponse } from 'next/server';
-import { getCommunityByCode, getMemberByToken, getVendor, upsertVouch } from '@/lib/db';
+import {
+  getCommunityByCode,
+  getMemberByToken,
+  getRequest,
+  getVendor,
+  linkVendorToRequest,
+} from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  let body: {
-    code?: string;
-    token?: string;
-    vendorId?: string;
-    rating?: number;
-    comment?: string;
-  };
+// Respond to a request by pointing at an EXISTING vendor ("I vouch for this
+// one"). New-vendor responses link via the requestId field on POST /api/vendors.
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  let body: { code?: string; token?: string; vendorId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
-  }
-
-  const rating = Number(body.rating);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    return NextResponse.json(
-      { error: 'Please pick a star rating from 1 to 5.' },
-      { status: 400 }
-    );
   }
 
   try {
@@ -43,16 +40,18 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
+    const req = await getRequest(params.id);
+    if (!req || req.community_id !== community.id) {
+      return NextResponse.json({ error: 'Request not found.' }, { status: 404 });
+    }
     const vendor = await getVendor(body.vendorId ?? '');
     if (!vendor || vendor.community_id !== community.id) {
       return NextResponse.json({ error: 'Vendor not found.' }, { status: 404 });
     }
-    const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
-
-    await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+    await linkVendorToRequest({ requestId: req.id, vendorId: vendor.id, memberId: member.id });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('POST /api/vouches error:', err);
-    return NextResponse.json({ error: 'Could not save vouch. Please try again.' }, { status: 500 });
+    console.error('POST /api/requests/[id]/respond error:', err);
+    return NextResponse.json({ error: 'Could not add your recommendation. Please try again.' }, { status: 500 });
   }
 }

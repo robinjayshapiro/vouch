@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { StoredMember, VendorWithStats } from '@/types';
+import type { RequestSummary, StoredMember, VendorWithStats } from '@/types';
 import { getStoredMember } from '@/lib/identity';
-import { CATEGORIES_BY_LABEL } from '@/lib/categories';
+import { CATEGORIES_BY_LABEL, getCategory } from '@/lib/categories';
 import JoinGate from '@/components/JoinGate';
 import VendorCard from '@/components/VendorCard';
 import ModerationPanel from './ModerationPanel';
+import AskGroupModal from './AskGroupModal';
+import SettingsPanel from './SettingsPanel';
 
 export default function CommunityClient({
   community,
@@ -23,15 +25,20 @@ export default function CommunityClient({
   const [copied, setCopied] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingMembers, setPendingMembers] = useState(0);
+  const [viewerStatus, setViewerStatus] = useState<'approved' | 'pending' | null>(null);
   const [modOpen, setModOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [openRequests, setOpenRequests] = useState<RequestSummary[]>([]);
 
   useEffect(() => {
     setMember(getStoredMember(community.code));
     setCheckedIdentity(true);
   }, [community.code]);
 
-  // Ask the server whether the signed-in member is an admin (and how many edits
-  // await review) so we can show the moderation entry.
+  // Ask the server about the viewer (role/status) and admin counts so we can
+  // show moderation/settings entries or a pending-approval screen.
   const refreshAdminState = useCallback(
     async (token: string) => {
       const res = await fetch(`/api/communities/${community.code}?token=${token}`, {
@@ -41,6 +48,8 @@ export default function CommunityClient({
       if (res.ok) {
         setIsAdmin(data.viewerRole === 'admin');
         setPendingCount(data.pendingEdits ?? 0);
+        setPendingMembers(data.pendingMembers ?? 0);
+        setViewerStatus(data.viewerStatus ?? null);
       }
     },
     [community.code]
@@ -49,6 +58,18 @@ export default function CommunityClient({
   useEffect(() => {
     if (member?.token) refreshAdminState(member.token);
   }, [member?.token, refreshAdminState]);
+
+  const loadRequests = useCallback(async () => {
+    const res = await fetch(`/api/communities/${community.code}/requests`, {
+      cache: 'no-store',
+    });
+    const data = await res.json();
+    if (res.ok) setOpenRequests(data.requests);
+  }, [community.code]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
 
   const fetchVendors = useCallback(async () => {
     const params = new URLSearchParams({ code: community.code });
@@ -80,6 +101,20 @@ export default function CommunityClient({
     }
   }
 
+  // Pending members wait for an organizer before they can see the directory.
+  if (viewerStatus === 'pending') {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-5 text-center">
+        <p className="text-5xl" aria-hidden="true">⏳</p>
+        <h1 className="mt-4 text-2xl font-extrabold text-ink">You&apos;re on the list!</h1>
+        <p className="mt-2 text-lg text-soft">
+          {community.name} approves new members. An organizer will let you in
+          shortly — check back soon.
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-28 pt-6">
       <header>
@@ -98,6 +133,14 @@ export default function CommunityClient({
           >
             {copied ? '✅ Invite copied!' : `📨 Invite code: ${community.code}`}
           </button>
+          {member && (
+            <button
+              onClick={() => setAskOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-coral-600 px-4 py-2 text-base font-semibold text-white transition-colors hover:bg-coral-700"
+            >
+              🙋 Ask the group
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => setModOpen(true)}
@@ -111,8 +154,52 @@ export default function CommunityClient({
               )}
             </button>
           )}
+          {isAdmin && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-navy-100 px-4 py-2 text-base font-semibold text-navy-800 transition-colors hover:bg-navy-200"
+            >
+              ⚙️ Settings
+              {pendingMembers > 0 && (
+                <span className="rounded-full bg-coral-600 px-2 text-sm font-bold text-white">
+                  {pendingMembers}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </header>
+
+      {openRequests.length > 0 && (
+        <section className="mt-5" aria-label="Open requests">
+          <h2 className="text-base font-bold text-ink">Neighbors are looking for…</h2>
+          <div className="mt-2 flex flex-col gap-2">
+            {openRequests.map((r) => {
+              const cat = getCategory(r.category);
+              return (
+                <Link
+                  key={r.id}
+                  href={`/c/${community.code}/ask/${r.id}`}
+                  className="flex items-center justify-between gap-3 rounded-2xl border-2 border-coral-200 bg-coral-50 p-3 transition-colors hover:bg-coral-100"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-bold text-ink">
+                      {cat.emoji} {cat.label}
+                    </span>
+                    <span className="block text-sm text-soft">
+                      {r.asked_by_name.split(' ')[0]} asked ·{' '}
+                      {r.response_count} {r.response_count === 1 ? 'reply' : 'replies'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-base font-semibold text-coral-700">
+                    Help →
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {modOpen && member && (
         <ModerationPanel
@@ -123,6 +210,23 @@ export default function CommunityClient({
             refreshAdminState(member.token);
             fetchVendors();
           }}
+        />
+      )}
+
+      {askOpen && member && (
+        <AskGroupModal
+          community={{ name: community.name, code: community.code }}
+          member={member}
+          onClose={() => setAskOpen(false)}
+        />
+      )}
+
+      {settingsOpen && member && (
+        <SettingsPanel
+          code={community.code}
+          token={member.token}
+          onClose={() => setSettingsOpen(false)}
+          onChanged={() => refreshAdminState(member.token)}
         />
       )}
 

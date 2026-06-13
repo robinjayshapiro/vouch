@@ -3,9 +3,11 @@ import {
   createLoginToken,
   findMemberByPhone,
   getCommunityByCode,
+  isPhoneAllowed,
   joinCommunity,
 } from '@/lib/db';
 import { appUrl, sendSms, signInMessage } from '@/lib/sms';
+import type { MemberStatus } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +40,15 @@ export async function POST(
       );
     }
 
+    // Gated communities need a phone (it's how we identify/approve people).
+    const gated = community.join_policy !== 'open';
+    if (gated && !phone) {
+      return NextResponse.json(
+        { error: 'This community asks for your mobile number to join.' },
+        { status: 400 }
+      );
+    }
+
     // If that mobile already belongs to a member, this is a returning person —
     // text them a sign-in link instead of creating a duplicate.
     if (phone) {
@@ -56,10 +67,19 @@ export async function POST(
       }
     }
 
-    const member = await joinCommunity(community.id, name, phone);
+    // Decide approval status from the community's join policy.
+    let status: MemberStatus = 'approved';
+    if (community.join_policy === 'admin_approval') {
+      status = 'pending';
+    } else if (community.join_policy === 'approved_list') {
+      status = phone && (await isPhoneAllowed(community.id, phone)) ? 'approved' : 'pending';
+    }
+
+    const member = await joinCommunity(community.id, name, phone, status);
     return NextResponse.json({
       community: { id: community.id, name: community.name, code: community.code },
       member: { id: member.id, name: member.name, token: member.token },
+      status,
     });
   } catch (err) {
     console.error('POST /api/communities/[code]/join error:', err);

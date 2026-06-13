@@ -40,6 +40,12 @@ export async function POST(
         { status: 401 }
       );
     }
+    if (member.status !== 'approved') {
+      return NextResponse.json(
+        { error: 'Your membership is awaiting approval.' },
+        { status: 403 }
+      );
+    }
     const vendor = await getVendor(params.id);
     if (!vendor || vendor.community_id !== community.id) {
       return NextResponse.json({ error: 'Vendor not found.' }, { status: 404 });

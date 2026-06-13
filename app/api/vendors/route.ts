@@ -4,6 +4,8 @@ import {
   findVendorByPhone,
   getCommunityByCode,
   getMemberByToken,
+  getRequest,
+  linkVendorToRequest,
   listVendors,
   upsertVouch,
 } from '@/lib/db';
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
     contact?: string;
     rating?: number;
     comment?: string;
+    requestId?: string;
   };
   try {
     body = await request.json();
@@ -76,6 +79,12 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+    if (member.status !== 'approved') {
+      return NextResponse.json(
+        { error: 'Your membership is awaiting approval.' },
+        { status: 403 }
+      );
+    }
 
     const phone = (body.phone ?? '').trim().slice(0, 30) || null;
     const contact = (body.contact ?? '').trim().slice(0, 120) || null;
@@ -103,6 +112,18 @@ export async function POST(request: Request) {
       addedBy: member.id,
     });
     await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+
+    // If this vendor was added in response to an "ask the group" request, link it.
+    if (body.requestId) {
+      const req = await getRequest(body.requestId);
+      if (req && req.community_id === community.id) {
+        await linkVendorToRequest({
+          requestId: req.id,
+          vendorId: vendor.id,
+          memberId: member.id,
+        });
+      }
+    }
 
     return NextResponse.json({ vendor });
   } catch (err) {

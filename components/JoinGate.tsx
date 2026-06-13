@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { MemberSuggestion, StoredMember } from '@/types';
 import { storeMember } from '@/lib/identity';
 
-type Mode = 'join' | 'suggestions' | 'claimPhone' | 'signin' | 'sent';
+type Mode = 'join' | 'suggestions' | 'claimPhone' | 'signin' | 'sent' | 'pending';
 
 /**
  * First-open gate for a community. Beyond "type your name," it checks whether
@@ -51,6 +51,11 @@ export default function JoinGate({
       }
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong.');
       storeMember(code, data.member);
+      // Gated community: the member is pending until an organizer approves.
+      if (data.status === 'pending') {
+        setMode('pending');
+        return;
+      }
       onJoined(data.member);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -371,6 +376,19 @@ export default function JoinGate({
             <p className="mt-3 text-base text-soft">
               The link opens this community signed in as you. You can close this
               window.
+            </p>
+          </>
+        )}
+
+        {mode === 'pending' && (
+          <>
+            <p className="text-4xl" aria-hidden="true">⏳</p>
+            <h2 id="join-title" className="mt-2 text-2xl font-extrabold text-ink">
+              You&apos;re on the list, {name.trim().split(' ')[0]}!
+            </h2>
+            <p className="mt-2 text-lg text-soft">
+              {communityName} approves new members. An organizer will let you in
+              shortly — check back soon.
             </p>
           </>
         )}

@@ -1,11 +1,15 @@
+export type JoinPolicy = 'open' | 'admin_approval' | 'approved_list';
+
 export interface Community {
   id: string;
   name: string;
   code: string;
+  join_policy: JoinPolicy;
   created_at: string;
 }
 
 export type MemberRole = 'member' | 'admin';
+export type MemberStatus = 'approved' | 'pending';
 
 export interface Member {
   id: string;
@@ -14,6 +18,15 @@ export interface Member {
   token: string;
   phone: string | null;
   role: MemberRole;
+  status: MemberStatus;
+  created_at: string;
+}
+
+/** A member awaiting approval, shown in the admin queue. */
+export interface PendingMember {
+  id: string;
+  name: string;
+  phone: string | null;
   created_at: string;
 }
 
@@ -68,6 +81,35 @@ export interface VendorWithStats extends Vendor {
   // Names of members who vouched, most recent first (deduped). Drives the
   // "Vouched by …" trust line on directory cards.
   voucher_names: string[];
+}
+
+export type RequestStatus = 'open' | 'closed';
+
+export interface VouchRequest {
+  id: string;
+  community_id: string;
+  category: string;
+  note: string | null;
+  asked_by: string;
+  status: RequestStatus;
+  created_at: string;
+}
+
+/** A request plus the asker's name and how many vendors have been recommended. */
+export interface RequestSummary {
+  id: string;
+  category: string;
+  note: string | null;
+  asked_by: string;
+  asked_by_name: string;
+  status: RequestStatus;
+  created_at: string;
+  response_count: number;
+}
+
+/** Full request detail for the ask page: summary + recommended vendors with stats. */
+export interface RequestDetail extends RequestSummary {
+  responses: VendorWithStats[];
 }
 
 export interface Vouch {

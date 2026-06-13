@@ -2,12 +2,19 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import type {
   Community,
+  JoinPolicy,
   Member,
+  MemberStatus,
   MemberSuggestion,
+  PendingMember,
   PendingVendorEdit,
+  RequestDetail,
+  RequestStatus,
+  RequestSummary,
   Vendor,
   VendorEditChanges,
   VendorWithStats,
+  VouchRequest,
   VouchWithMember,
 } from '@/types';
 import { getCategory, isValidCategory } from '@/lib/categories';
@@ -86,7 +93,8 @@ export async function getCommunityByCode(
 export async function joinCommunity(
   communityId: string,
   name: string,
-  phone?: string | null
+  phone?: string | null,
+  status: MemberStatus = 'approved'
 ): Promise<Member> {
   const { data, error } = await getClient()
     .from('vouch_members')
@@ -95,11 +103,131 @@ export async function joinCommunity(
       name,
       token: randomUUID(),
       phone: phone?.trim() || null,
+      status,
     })
     .select()
     .single();
   if (error) throw new Error(error.message);
   return data as Member;
+}
+
+// Membership gating helpers ────────────────────────────────────────────────
+
+export async function setJoinPolicy(
+  communityId: string,
+  policy: JoinPolicy
+): Promise<void> {
+  const { error } = await getClient()
+    .from('vouch_communities')
+    .update({ join_policy: policy })
+    .eq('id', communityId);
+  if (error) throw new Error(error.message);
+}
+
+export async function isPhoneAllowed(
+  communityId: string,
+  phone: string
+): Promise<boolean> {
+  const digits = phoneDigits(phone);
+  if (digits.length < 7) return false;
+  const { data, error } = await getClient()
+    .from('vouch_allowed_phones')
+    .select('phone')
+    .eq('community_id', communityId);
+  if (error) throw new Error(error.message);
+  return (data as { phone: string }[]).some((r) => phoneDigits(r.phone) === digits);
+}
+
+// Add phone numbers to the allowlist; returns how many were newly added.
+export async function addAllowedPhones(
+  communityId: string,
+  phones: string[]
+): Promise<number> {
+  const rows = phones
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((phone) => ({ community_id: communityId, phone }));
+  if (rows.length === 0) return 0;
+  const { data, error } = await getClient()
+    .from('vouch_allowed_phones')
+    .upsert(rows, { onConflict: 'community_id,phone', ignoreDuplicates: true })
+    .select('id');
+  if (error) throw new Error(error.message);
+  return (data as unknown[]).length;
+}
+
+export async function listAllowedPhones(
+  communityId: string
+): Promise<{ id: string; phone: string }[]> {
+  const { data, error } = await getClient()
+    .from('vouch_allowed_phones')
+    .select('id, phone')
+    .eq('community_id', communityId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data as { id: string; phone: string }[];
+}
+
+export async function removeAllowedPhone(
+  communityId: string,
+  id: string
+): Promise<void> {
+  const { error } = await getClient()
+    .from('vouch_allowed_phones')
+    .delete()
+    .eq('community_id', communityId)
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function countPendingMembers(communityId: string): Promise<number> {
+  const { count, error } = await getClient()
+    .from('vouch_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('community_id', communityId)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export async function listPendingMembers(
+  communityId: string
+): Promise<PendingMember[]> {
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .select('id, name, phone, created_at')
+    .eq('community_id', communityId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data as PendingMember[];
+}
+
+export async function setMemberStatus(
+  communityId: string,
+  memberId: string,
+  status: MemberStatus
+): Promise<void> {
+  const { error } = await getClient()
+    .from('vouch_members')
+    .update({ status })
+    .eq('community_id', communityId)
+    .eq('id', memberId);
+  if (error) throw new Error(error.message);
+}
+
+export async function declineMember(
+  communityId: string,
+  memberId: string
+): Promise<void> {
+  // Declining removes the pending record entirely so they can re-request later.
+  const { error } = await getClient()
+    .from('vouch_members')
+    .delete()
+    .eq('community_id', communityId)
+    .eq('id', memberId)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
 }
 
 export async function getMemberByToken(
@@ -292,13 +420,48 @@ interface VendorRow extends Vendor {
   }[];
 }
 
+// Shared select shape + stat mapping so vendor lists and request responses
+// compute counts, average, latest comment, and voucher names identically.
+const VENDOR_WITH_VOUCHES_SELECT =
+  '*, vouch_vouches(rating, comment, created_at, vouch_members(name))';
+
+function toVendorWithStats({ vouch_vouches, ...vendor }: VendorRow): VendorWithStats {
+  const byRecent = [...vouch_vouches].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at)
+  );
+  const latest = byRecent.find((w) => w.comment);
+  const names: string[] = [];
+  for (const w of byRecent) {
+    const name = w.vouch_members?.name;
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return {
+    ...vendor,
+    vouch_count: vouch_vouches.length,
+    avg_rating:
+      vouch_vouches.length > 0
+        ? vouch_vouches.reduce((sum, w) => sum + w.rating, 0) / vouch_vouches.length
+        : null,
+    latest_comment: latest?.comment ?? null,
+    voucher_names: names,
+  };
+}
+
+function sortByTrust(a: VendorWithStats, b: VendorWithStats): number {
+  return (
+    b.vouch_count - a.vouch_count ||
+    (b.avg_rating ?? 0) - (a.avg_rating ?? 0) ||
+    b.created_at.localeCompare(a.created_at)
+  );
+}
+
 export async function listVendors(
   communityId: string,
   opts: { category?: string; q?: string } = {}
 ): Promise<VendorWithStats[]> {
   let query = getClient()
     .from('vouch_vendors')
-    .select('*, vouch_vouches(rating, comment, created_at, vouch_members(name))')
+    .select(VENDOR_WITH_VOUCHES_SELECT)
     .eq('community_id', communityId);
   if (opts.category) query = query.eq('category', opts.category);
   const { data, error } = await query;
@@ -316,35 +479,9 @@ export async function listVendors(
           phoneDigits(v.phone).includes(needleDigits)) ||
         v.vouch_vouches.some((w) => w.comment?.toLowerCase().includes(needle))
     )
-    .map(({ vouch_vouches, ...vendor }): VendorWithStats => {
-      const byRecent = [...vouch_vouches].sort((a, b) =>
-        b.created_at.localeCompare(a.created_at)
-      );
-      const latest = byRecent.find((w) => w.comment);
-      // Distinct voucher names, most recent first.
-      const names: string[] = [];
-      for (const w of byRecent) {
-        const name = w.vouch_members?.name;
-        if (name && !names.includes(name)) names.push(name);
-      }
-      return {
-        ...vendor,
-        vouch_count: vouch_vouches.length,
-        avg_rating:
-          vouch_vouches.length > 0
-            ? vouch_vouches.reduce((sum, w) => sum + w.rating, 0) / vouch_vouches.length
-            : null,
-        latest_comment: latest?.comment ?? null,
-        voucher_names: names,
-      };
-    });
+    .map(toVendorWithStats);
 
-  return vendors.sort(
-    (a, b) =>
-      b.vouch_count - a.vouch_count ||
-      (b.avg_rating ?? 0) - (a.avg_rating ?? 0) ||
-      b.created_at.localeCompare(a.created_at)
-  );
+  return vendors.sort(sortByTrust);
 }
 
 export async function getVendor(id: string): Promise<Vendor | undefined> {
@@ -553,5 +690,151 @@ export async function upsertVouch(input: {
       },
       { onConflict: 'vendor_id,member_id' }
     );
+  if (error) throw new Error(error.message);
+}
+
+// ── "Ask the group" requests ──────────────────────────────────────────────
+
+export async function createRequest(input: {
+  communityId: string;
+  category: string;
+  note: string | null;
+  askedBy: string;
+}): Promise<VouchRequest> {
+  const { data, error } = await getClient()
+    .from('vouch_requests')
+    .insert({
+      community_id: input.communityId,
+      category: input.category,
+      note: input.note,
+      asked_by: input.askedBy,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as VouchRequest;
+}
+
+export async function countOpenRequests(communityId: string): Promise<number> {
+  const { count, error } = await getClient()
+    .from('vouch_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('community_id', communityId)
+    .eq('status', 'open');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+interface RequestRow {
+  id: string;
+  category: string;
+  note: string | null;
+  asked_by: string;
+  status: RequestStatus;
+  created_at: string;
+  vouch_members: { name: string } | null;
+  vouch_request_vendors: { vendor_id: string }[];
+}
+
+const REQUEST_SELECT =
+  'id, category, note, asked_by, status, created_at, vouch_members!vouch_requests_asked_by_fkey(name), vouch_request_vendors(vendor_id)';
+
+function toRequestSummary(r: RequestRow): RequestSummary {
+  return {
+    id: r.id,
+    category: r.category,
+    note: r.note,
+    asked_by: r.asked_by,
+    asked_by_name: r.vouch_members?.name ?? 'Someone',
+    status: r.status,
+    created_at: r.created_at,
+    response_count: r.vouch_request_vendors.length,
+  };
+}
+
+export async function listOpenRequests(
+  communityId: string
+): Promise<RequestSummary[]> {
+  const { data, error } = await getClient()
+    .from('vouch_requests')
+    .select(REQUEST_SELECT)
+    .eq('community_id', communityId)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data as unknown as RequestRow[]).map(toRequestSummary);
+}
+
+export async function getRequestDetail(
+  requestId: string,
+  communityId: string
+): Promise<RequestDetail | undefined> {
+  if (!requestId) return undefined;
+  const db = getClient();
+  const { data, error } = await db
+    .from('vouch_requests')
+    .select(REQUEST_SELECT)
+    .eq('id', requestId)
+    .eq('community_id', communityId)
+    .maybeSingle();
+  if (error) return undefined;
+  const row = data as unknown as RequestRow | null;
+  if (!row) return undefined;
+
+  const vendorIds = row.vouch_request_vendors.map((rv) => rv.vendor_id);
+  let responses: VendorWithStats[] = [];
+  if (vendorIds.length > 0) {
+    const { data: vData, error: vErr } = await db
+      .from('vouch_vendors')
+      .select(VENDOR_WITH_VOUCHES_SELECT)
+      .in('id', vendorIds);
+    if (vErr) throw new Error(vErr.message);
+    responses = (vData as VendorRow[]).map(toVendorWithStats).sort(sortByTrust);
+  }
+
+  return { ...toRequestSummary(row), responses };
+}
+
+// Link a vendor to a request as a response. Idempotent on (request, vendor).
+export async function linkVendorToRequest(input: {
+  requestId: string;
+  vendorId: string;
+  memberId: string;
+}): Promise<void> {
+  const { error } = await getClient()
+    .from('vouch_request_vendors')
+    .upsert(
+      {
+        request_id: input.requestId,
+        vendor_id: input.vendorId,
+        member_id: input.memberId,
+      },
+      { onConflict: 'request_id,vendor_id' }
+    );
+  if (error) throw new Error(error.message);
+}
+
+export async function getRequest(
+  requestId: string
+): Promise<VouchRequest | undefined> {
+  if (!requestId) return undefined;
+  const { data, error } = await getClient()
+    .from('vouch_requests')
+    .select()
+    .eq('id', requestId)
+    .maybeSingle();
+  if (error) return undefined;
+  return (data as VouchRequest | null) ?? undefined;
+}
+
+export async function closeRequest(
+  requestId: string,
+  communityId: string
+): Promise<void> {
+  const { error } = await getClient()
+    .from('vouch_requests')
+    .update({ status: 'closed' })
+    .eq('id', requestId)
+    .eq('community_id', communityId);
   if (error) throw new Error(error.message);
 }

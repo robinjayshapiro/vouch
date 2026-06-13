@@ -26,10 +26,18 @@ export default function AddVendorClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [duplicate, setDuplicate] = useState<{ id: string; name: string } | null>(null);
+  // When arriving from an "ask the group" request, we pre-fill the category and
+  // link the new vendor back to that request on save.
+  const [requestId, setRequestId] = useState('');
 
   useEffect(() => {
     setMember(getStoredMember(community.code));
     setCheckedIdentity(true);
+    const sp = new URLSearchParams(window.location.search);
+    const req = sp.get('request');
+    const cat = sp.get('category');
+    if (req) setRequestId(req);
+    if (cat) setCategory(cat);
   }, [community.code]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,6 +67,7 @@ export default function AddVendorClient({
           contact: contact.trim(),
           rating,
           comment: comment.trim(),
+          requestId: requestId || undefined,
         }),
       });
       const data = await res.json();
@@ -68,7 +77,12 @@ export default function AddVendorClient({
         return;
       }
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong.');
-      router.push(`/c/${community.code}/v/${data.vendor.id}`);
+      // If this was a response to a request, return to that request's page.
+      router.push(
+        requestId
+          ? `/c/${community.code}/ask/${requestId}`
+          : `/c/${community.code}/v/${data.vendor.id}`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setBusy(false);
