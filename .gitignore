@@ -21,3 +21,6 @@ npm-debug.log*
 next-env.d.ts
 
 .vercel
+
+# real contact data — keep out of the repo
+scripts/gates-data.json
