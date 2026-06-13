@@ -5,6 +5,20 @@ import type { VendorWithStats } from '@/types';
 import { getCategory } from '@/lib/categories';
 import { Stars } from '@/components/Stars';
 
+// "Brett Rosenblatt" -> "Brett R."; single-word names pass through.
+function shortName(full: string): string {
+  const [first, ...rest] = full.trim().split(/\s+/);
+  return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first;
+}
+
+function vouchedByLine(names: string[]): string | null {
+  if (names.length === 0) return null;
+  const shown = names.slice(0, 2).map(shortName);
+  if (names.length === 1) return `Vouched by ${shown[0]}`;
+  if (names.length === 2) return `Vouched by ${shown[0]} & ${shown[1]}`;
+  return `Vouched by ${shown[0]}, ${shown[1]} + ${names.length - 2} more`;
+}
+
 export default function VendorCard({
   vendor,
   code,
@@ -13,6 +27,7 @@ export default function VendorCard({
   code: string;
 }) {
   const category = getCategory(vendor.category);
+  const vouchedBy = vouchedByLine(vendor.voucher_names);
   return (
     <Link
       href={`/c/${code}/v/${vendor.id}`}
@@ -41,6 +56,9 @@ export default function VendorCard({
               <span className="text-base text-soft">No vouches yet</span>
             )}
           </div>
+          {vouchedBy && (
+            <p className="mt-1 text-sm font-semibold text-navy-600">{vouchedBy}</p>
+          )}
           {vendor.latest_comment && (
             <p className="mt-2 line-clamp-2 text-base italic text-soft">
               “{vendor.latest_comment}”

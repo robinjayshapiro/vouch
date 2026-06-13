@@ -44,6 +44,9 @@ export interface VendorWithStats extends Vendor {
   vouch_count: number;
   avg_rating: number | null;
   latest_comment: string | null;
+  // Names of members who vouched, most recent first (deduped). Drives the
+  // "Vouched by …" trust line on directory cards.
+  voucher_names: string[];
 }
 
 export interface Vouch {

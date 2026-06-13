@@ -47,7 +47,7 @@ export default function CommunityClient({
   async function copyInvite() {
     try {
       await navigator.clipboard.writeText(
-        `Join "${community.name}" on Vouch! Go to ${window.location.origin} and enter code ${community.code}`
+        `Join "${community.name}" on Vouch: ${window.location.origin}/join/${community.code}`
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

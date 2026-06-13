@@ -279,7 +279,12 @@ export async function getCommunityStats(communityId: string): Promise<{
 }
 
 interface VendorRow extends Vendor {
-  vouch_vouches: { rating: number; comment: string | null; created_at: string }[];
+  vouch_vouches: {
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    vouch_members: { name: string } | null;
+  }[];
 }
 
 export async function listVendors(
@@ -288,7 +293,7 @@ export async function listVendors(
 ): Promise<VendorWithStats[]> {
   let query = getClient()
     .from('vouch_vendors')
-    .select('*, vouch_vouches(rating, comment, created_at)')
+    .select('*, vouch_vouches(rating, comment, created_at, vouch_members(name))')
     .eq('community_id', communityId);
   if (opts.category) query = query.eq('category', opts.category);
   const { data, error } = await query;
@@ -307,9 +312,16 @@ export async function listVendors(
         v.vouch_vouches.some((w) => w.comment?.toLowerCase().includes(needle))
     )
     .map(({ vouch_vouches, ...vendor }): VendorWithStats => {
-      const latest = [...vouch_vouches]
-        .filter((w) => w.comment)
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      const byRecent = [...vouch_vouches].sort((a, b) =>
+        b.created_at.localeCompare(a.created_at)
+      );
+      const latest = byRecent.find((w) => w.comment);
+      // Distinct voucher names, most recent first.
+      const names: string[] = [];
+      for (const w of byRecent) {
+        const name = w.vouch_members?.name;
+        if (name && !names.includes(name)) names.push(name);
+      }
       return {
         ...vendor,
         vouch_count: vouch_vouches.length,
@@ -318,6 +330,7 @@ export async function listVendors(
             ? vouch_vouches.reduce((sum, w) => sum + w.rating, 0) / vouch_vouches.length
             : null,
         latest_comment: latest?.comment ?? null,
+        voucher_names: names,
       };
     });
 
