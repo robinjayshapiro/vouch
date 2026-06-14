@@ -1,8 +1,21 @@
 # Roles & Moderation — design
 
-Status: **design only, not yet implemented.** Captures what's needed to let
-members fix vendor details (feature idea #3) without letting anyone silently
-rewrite shared data. Written so it can be picked up cleanly later.
+Status: **Implemented** (shipped in commit `78b1e04`). This began as a design
+for letting members fix vendor details (feature idea #3) without letting anyone
+silently rewrite shared data, and the build followed it closely. Kept as an
+as-built record — the design below matches what's in the codebase.
+
+As-built map:
+- Role column + admin-on-create — `supabase/schema.sql`, `createCommunity()` in
+  `lib/db.ts`.
+- Edit endpoint with admin/`added_by` fast-path — `app/api/vendors/[id]/edit/route.ts`.
+- Moderation list + approve/reject — `app/api/communities/[code]/moderation/route.ts`,
+  `app/api/moderation/[id]/route.ts`, `app/c/[code]/ModerationPanel.tsx`.
+- "Suggest an edit" UI — `app/c/[code]/v/[id]/VendorClient.tsx`.
+
+One deviation from the draft below: approve/reject is a single endpoint
+(`POST /api/moderation/[id]`) as designed, and review state is guarded against
+double-apply via a `status='pending'` filter in `reviewVendorEdit()`.
 
 ## The problem
 
