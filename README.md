@@ -27,6 +27,8 @@ babysitters, handymen, and mechanics they would happily hire again.
 - [Tailwind CSS 3.4](https://tailwindcss.com/) for styling
 - [Supabase](https://supabase.com/) (Postgres) — all access goes through
   server-side API routes; no keys are exposed to the browser
+- Optional [Twilio](https://www.twilio.com/) for SMS magic-link sign-in
+  (falls back to logging the link to the server console in dev)
 
 ## Getting started
 
@@ -35,10 +37,19 @@ babysitters, handymen, and mechanics they would happily hire again.
    ```
    SUPABASE_URL=https://<your-project>.supabase.co
    SUPABASE_ANON_KEY=<your-anon-key>
+
+   # Optional — enables real SMS sign-in links. Without these, the link is
+   # printed to the server console so the flow stays fully testable locally.
+   TWILIO_ACCOUNT_SID=<sid>
+   TWILIO_AUTH_TOKEN=<token>
+   TWILIO_FROM=<phone number or Messaging Service SID>
+   APP_URL=https://<your-deployed-origin>   # where claim links point
    ```
 
 2. Run `supabase/schema.sql` in the Supabase SQL editor (one time). Tables
    are prefixed `vouch_` so they can share a database with other projects.
+   The script is idempotent (`create table if not exists` / `add column if
+   not exists`), so it's safe to re-run as the schema evolves.
 
 3. Install and run:
 
@@ -52,36 +63,101 @@ Open http://localhost:3000, start a community, and share the invite code.
 ## Deploying to Vercel
 
 Connect the GitHub repo in the Vercel dashboard (framework auto-detects as
-Next.js) and add the two environment variables above. Every push to `master`
-redeploys automatically.
+Next.js) and add the environment variables above. Every push to the
+production branch redeploys automatically.
+
+## Features
+
+Vouch has grown past a plain directory. The flows below are all live and
+covered by the route map further down:
+
+- **Join by name** — type your name and you're in (open communities). Add a
+  mobile number to sign in later from any device.
+- **Membership gating** — admins can set a community's join policy:
+  - `open` — anyone with the invite link joins instantly (default)
+  - `admin_approval` — new joiners are *pending* until an admin approves them
+  - `approved_list` — joiners whose phone is on the allowlist get in
+    instantly; everyone else queues for approval
+  Gated communities require a mobile number (it's how members are identified
+  and approved).
+- **Recommend & vouch** — add a vendor with your first 1–5★ vouch. Adding a
+  vendor whose phone already exists routes you to the existing listing instead
+  of creating a duplicate.
+- **Vouch for others' picks** — one vouch per person per vendor; vouching
+  again updates yours. Cards show the average rating, vouch count, who vouched,
+  and the latest comment.
+- **Ask the group** — post "anyone know a good electrician?" Neighbors reply
+  by pointing at an existing vendor or adding a new one, and the asker (or an
+  admin) can mark the request answered. Posting copies a WhatsApp-ready
+  message to share.
+- **Suggest an edit** — fix a vendor's name/category/phone/contact. Admins and
+  the member who originally added the vendor apply changes immediately;
+  everyone else's edit is queued for admin review.
+- **Cross-device sign-in (magic link)** — returning members enter their mobile
+  and get a single-use, 15-minute SMS link that signs them in on the new
+  device.
+- **Claim a seeded identity** — if someone added vouches under your name before
+  you joined, typing that name surfaces a "this might be you" prompt so you can
+  claim the record and own those vouches.
 
 ## How it works
 
 | Route | Purpose |
 | --- | --- |
 | `/` | Start a community or join with an invite code |
-| `/c/[code]` | Community directory: search, category filters, vendor list |
+| `/join/[code]` | Shareable invite link — lands on the join form, pre-filled |
+| `/c/[code]` | Community directory: search, category filters, vendor list, open requests, admin tools |
 | `/c/[code]/add` | Recommend a vendor (includes your first vouch) |
-| `/c/[code]/v/[id]` | Vendor detail: contact buttons, all vouches, add/update yours |
+| `/c/[code]/v/[id]` | Vendor detail: contact buttons, all vouches, add/update yours, suggest an edit |
+| `/c/[code]/ask/[id]` | "Ask the group" request: responses, recommend existing/new, mark answered |
+| `/claim/[token]` | Magic-link landing — signs you in and redirects into the community |
 
 ### Identity model
 
 No accounts. When you join a community, the server issues a member record
 with a private token, stored in `localStorage` per community
-(`vouch_member_{CODE}`). API routes that write data (adding vendors,
-vouching) validate the token server-side. Reading a community requires
-knowing its invite code.
+(`vouch_member_{CODE}`). API routes that write data (adding vendors, vouching,
+asking, editing) validate the token server-side and check membership status
+(`approved` vs `pending`) and role (`admin` vs `member`). Community creators
+are admins. Reading a community requires knowing its invite code.
+
+Cross-device sign-in works without any password: a returning member requests
+an SMS link tied to the phone on file. The link redeems a single-use,
+expiring token (`vouch_login_tokens`) and re-issues the member identity on the
+new device. Members with no phone on file (seeded or name-only joiners) can
+attach one when they claim their record.
 
 ### Database schema (see `supabase/schema.sql`)
 
-- `vouch_communities` — id, name, unique invite code
-- `vouch_members` — per-community identity (name + secret token)
+- `vouch_communities` — id, name, unique invite code, `join_policy`
+- `vouch_members` — per-community identity (name, secret token, optional
+  phone, `role`, `status`)
 - `vouch_vendors` — name, category, phone, contact, who added them
 - `vouch_vouches` — 1–5 star rating + comment, unique per (vendor, member)
+- `vouch_vendor_edits` — proposed edits to a vendor's shared fields, awaiting
+  admin review (jsonb patch of changed fields only)
+- `vouch_login_tokens` — single-use, expiring SMS magic-link tokens
+- `vouch_requests` / `vouch_request_vendors` — "ask the group" requests and
+  the vendors offered in response
+- `vouch_allowed_phones` — per-community allowlist for the `approved_list`
+  join policy
+
+All tables have row-level security disabled by design — every read and write
+is authorized inside the API routes via token validation, so the anon key is
+only ever used server-side.
+
+## Troubleshooting
+
+- **`Error: Cannot find module './XXX.js'` (HTTP 500 on API routes in dev).**
+  This is a stale/corrupted `.next` dev-build cache, not a code bug — the
+  webpack runtime is referencing a chunk that no longer exists. It commonly
+  happens if `next build` runs against the same `.next` folder while
+  `next dev` is live. Fix: stop the dev server, delete `.next`, and restart
+  (`rm -rf .next && npm run dev`).
 
 ## Roadmap ideas
 
-- Share links with the code embedded (`/join/CODE`)
 - Photos on vouches
 - "I hired them" follow-ups and job-cost ranges
-- Magic-link auth for cross-device identity
+- Notifications when a request matches a category you can answer
+- Season/seasonal arc of most-vouched pros
