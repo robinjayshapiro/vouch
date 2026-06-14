@@ -27,6 +27,9 @@ export default function CommunityClient({
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingMembers, setPendingMembers] = useState(0);
   const [viewerStatus, setViewerStatus] = useState<'approved' | 'pending' | null>(null);
+  // True once we've heard back from the server about the viewer's status.
+  // Without this the directory flashes for pending members before the gate kicks in.
+  const [viewerLoaded, setViewerLoaded] = useState(false);
   const [modOpen, setModOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -51,6 +54,7 @@ export default function CommunityClient({
         setPendingMembers(data.pendingMembers ?? 0);
         setViewerStatus(data.viewerStatus ?? null);
       }
+      setViewerLoaded(true);
     },
     [community.code]
   );
@@ -99,6 +103,16 @@ export default function CommunityClient({
     } catch {
       // Clipboard unavailable (e.g. http on old browsers) — code is visible anyway.
     }
+  }
+
+  // While we're checking whether the signed-in viewer is approved, hold the
+  // directory back — otherwise it flashes for pending members before the gate.
+  if (member && !viewerLoaded) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-5">
+        <p className="text-lg text-soft">Loading…</p>
+      </main>
+    );
   }
 
   // Pending members wait for an organizer before they can see the directory.

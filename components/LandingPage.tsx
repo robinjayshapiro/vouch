@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { storeMember } from '@/lib/identity';
 
@@ -20,9 +20,21 @@ export default function LandingPage({
   const [mode, setMode] = useState<Mode>(initialMode);
   const [communityName, setCommunityName] = useState('');
   const [yourName, setYourName] = useState('');
+  const [yourPhone, setYourPhone] = useState('');
   const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Some communities require a phone (admin approval / approved-list policies).
+  // When the API tells us so, focus the phone field so the user can supply one
+  // without changing pages.
+  const [phoneRequired, setPhoneRequired] = useState(false);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+
+  // When the server tells us the community is gated, focus the phone field
+  // so the user can recover without scrolling around.
+  useEffect(() => {
+    if (phoneRequired) phoneInputRef.current?.focus();
+  }, [phoneRequired]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -58,11 +70,32 @@ export default function LandingPage({
       const res = await fetch(`/api/communities/${code}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: yourName.trim() }),
+        body: JSON.stringify({
+          name: yourName.trim(),
+          phone: yourPhone.trim() || undefined,
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Something went wrong.');
+      // Phone already belonged to a member — server texted a sign-in link.
+      if (res.status === 409 && data.signin) {
+        setError(data.message ?? 'Check your texts for a sign-in link.');
+        setBusy(false);
+        return;
+      }
+      if (!res.ok) {
+        // Phone-required communities: surface the phone field instead of dead-ending.
+        if (
+          res.status === 400 &&
+          typeof data.error === 'string' &&
+          data.error.toLowerCase().includes('mobile number')
+        ) {
+          setPhoneRequired(true);
+        }
+        throw new Error(data.error ?? 'Something went wrong.');
+      }
       storeMember(code, data.member);
+      // Gated communities may park the join in "pending" until an admin approves.
+      // The community page handles the pending UI; just route there.
       router.push(`/c/${code}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -261,6 +294,31 @@ export default function LandingPage({
               maxLength={40}
               required
               autoFocus={!!invitedTo}
+              className={inputClass}
+            />
+          </div>
+          <div className="mt-4">
+            <label htmlFor="join-your-phone" className="block text-base font-semibold text-ink">
+              Mobile number{' '}
+              <span className="font-normal text-soft">
+                {phoneRequired ? '(required)' : '(recommended)'}
+              </span>
+            </label>
+            <p className="mt-0.5 text-sm text-soft">
+              {phoneRequired
+                ? 'This community asks for your number to join.'
+                : "Lets you sign in on any device — we'll text you a link."}
+            </p>
+            <input
+              id="join-your-phone"
+              ref={phoneInputRef}
+              type="tel"
+              value={yourPhone}
+              onChange={(e) => setYourPhone(e.target.value)}
+              placeholder="e.g. (555) 123-4567"
+              autoComplete="tel"
+              maxLength={30}
+              required={phoneRequired}
               className={inputClass}
             />
           </div>

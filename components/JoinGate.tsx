@@ -32,6 +32,9 @@ export default function JoinGate({
   const [claiming, setClaiming] = useState<MemberSuggestion | null>(null);
   const [claimPhone, setClaimPhone] = useState('');
   const [sentMessage, setSentMessage] = useState('');
+  // Gated communities require a phone. When the API tells us so, surface the
+  // phone field (back on the join step if we're past it) and mark it required.
+  const [phoneRequired, setPhoneRequired] = useState(false);
 
   async function joinFresh() {
     setBusy(true);
@@ -49,7 +52,20 @@ export default function JoinGate({
         setMode('sent');
         return;
       }
-      if (!res.ok) throw new Error(data.error ?? 'Something went wrong.');
+      if (!res.ok) {
+        // Phone-required community: send the user back to the join step with
+        // the phone field marked required, instead of dead-ending on the
+        // suggestions screen where there's nowhere to type a number.
+        if (
+          res.status === 400 &&
+          typeof data.error === 'string' &&
+          data.error.toLowerCase().includes('mobile number')
+        ) {
+          setPhoneRequired(true);
+          setMode('join');
+        }
+        throw new Error(data.error ?? 'Something went wrong.');
+      }
       storeMember(code, data.member);
       // Gated community: the member is pending until an organizer approves.
       if (data.status === 'pending') {
@@ -202,10 +218,14 @@ export default function JoinGate({
               />
               <label htmlFor="join-phone" className="mt-4 block text-base font-semibold text-ink">
                 Mobile number{' '}
-                <span className="font-normal text-soft">(recommended)</span>
+                <span className="font-normal text-soft">
+                  {phoneRequired ? '(required)' : '(recommended)'}
+                </span>
               </label>
               <p className="mt-0.5 text-sm text-soft">
-                Lets you sign in on any device — we&apos;ll text you a link.
+                {phoneRequired
+                  ? `${communityName} asks for your number to join.`
+                  : "Lets you sign in on any device — we'll text you a link."}
               </p>
               <input
                 id="join-phone"
@@ -215,6 +235,7 @@ export default function JoinGate({
                 placeholder="e.g. (555) 123-4567"
                 autoComplete="tel"
                 maxLength={30}
+                required={phoneRequired}
                 className={inputClass}
               />
               {error && (
