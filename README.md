@@ -155,6 +155,33 @@ only ever used server-side.
   `next dev` is live. Fix: stop the dev server, delete `.next`, and restart
   (`rm -rf .next && npm run dev`).
 
+## Known limitations
+
+- **Cross-device sign-in needs an SMS provider.** Returning members and anyone
+  joining a restricted community sign in via an SMS magic link. Without Twilio
+  configured, the link can't be delivered — in local dev it's logged to the
+  server console *and* surfaced as a "Dev mode: tap here to sign in" shortcut
+  on the "Check your texts!" screen (never in production). A production
+  restricted community genuinely requires a delivery channel, since the link
+  has to reach a device you don't control. On the device you originally joined
+  from, no link is needed — your identity is already in `localStorage`.
+- **Claiming a seeded identity is honor-system.** If vouches were added under
+  your name before you joined, anyone who types that name can claim the record
+  by attaching a phone number — there's no verification of the *first* claim.
+  This is an intentional trade-off for low-friction onboarding in a trust
+  circle; the captured phone is what secures every sign-in afterward.
+- **The directory loads behind the join gate.** For a non-member, vendor data
+  is fetched and present in the DOM beneath the join modal. Access is scoped by
+  knowing the invite code, not by hiding the markup — fine for an
+  invite-semi-public directory, but not a hard paywall.
+- **Pending members can open the add/vouch forms by direct link.** The
+  directory shows pending members a "you're on the list" wait screen, but
+  visiting `/c/[code]/add` or a vendor page directly still renders the form;
+  the write is rejected server-side (403) on submit rather than gated up front.
+- **No self-service account or community management yet.** There's no way for a
+  member to leave a community or for anyone to delete a community; cleanup is a
+  manual database operation.
+
 ## Roadmap ideas
 
 - Photos on vouches

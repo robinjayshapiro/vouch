@@ -6,7 +6,7 @@ import {
   isPhoneAllowed,
   joinCommunity,
 } from '@/lib/db';
-import { appUrl, sendSms, signInMessage } from '@/lib/sms';
+import { appUrl, devSignInLink, sendSms, signInMessage } from '@/lib/sms';
 import type { MemberStatus } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -55,12 +55,15 @@ export async function POST(
       const existing = await findMemberByPhone(community.id, phone);
       if (existing) {
         const token = await createLoginToken(existing.id, 15);
-        await sendSms(phone, signInMessage(community.name, `${appUrl()}/claim/${token}`));
+        const link = `${appUrl()}/claim/${token}`;
+        const result = await sendSms(phone, signInMessage(community.name, link));
+        const devLink = devSignInLink(result, link);
         return NextResponse.json(
           {
             signin: true,
             name: existing.name,
             message: `That number is already registered to ${existing.name}. We just texted a sign-in link.`,
+            ...(devLink && { devLink }),
           },
           { status: 409 }
         );

@@ -51,6 +51,14 @@ export function signInMessage(communityName: string, link: string): string {
   return `Tap to sign in to ${communityName} on Vouch: ${link}`;
 }
 
+// When no SMS provider is configured (local dev), the link can't be delivered.
+// Outside production we hand it back to the client so sign-in is testable
+// without a phone. In production this returns undefined — the link is only ever
+// sent over SMS, never exposed in an API response.
+export function devSignInLink(result: SmsResult, link: string): string | undefined {
+  return !result.delivered && process.env.NODE_ENV !== 'production' ? link : undefined;
+}
+
 /** Where claim links point. APP_URL should be the deployed origin in prod. */
 export function appUrl(): string {
   return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '');

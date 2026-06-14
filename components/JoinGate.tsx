@@ -32,6 +32,9 @@ export default function JoinGate({
   const [claiming, setClaiming] = useState<MemberSuggestion | null>(null);
   const [claimPhone, setClaimPhone] = useState('');
   const [sentMessage, setSentMessage] = useState('');
+  // In local dev with no SMS provider, the API hands back the sign-in link so
+  // we can show a tappable shortcut instead of forcing a trip to the logs.
+  const [devLink, setDevLink] = useState('');
   // Gated communities require a phone. When the API tells us so, surface the
   // phone field (back on the join step if we're past it) and mark it required.
   const [phoneRequired, setPhoneRequired] = useState(false);
@@ -49,6 +52,7 @@ export default function JoinGate({
       // Phone already belonged to a member — we texted them a sign-in link.
       if (res.status === 409 && data.signin) {
         setSentMessage(data.message);
+        setDevLink(data.devLink ?? '');
         setMode('sent');
         return;
       }
@@ -116,12 +120,14 @@ export default function JoinGate({
     }
     setBusy(true);
     try {
-      await fetch('/api/auth/sms', {
+      const res = await fetch('/api/auth/sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, memberId: s.id }),
       });
+      const data = await res.json().catch(() => ({}));
       setSentMessage(`We texted ${s.name.split(' ')[0]}'s number a sign-in link. Tap it on your phone to finish.`);
+      setDevLink(data.devLink ?? '');
       setMode('sent');
     } finally {
       setBusy(false);
@@ -142,12 +148,14 @@ export default function JoinGate({
       const data = await res.json();
       // Someone already claimed this identity — verify by text instead.
       if (res.status === 409 && data.alreadyClaimed) {
-        await fetch('/api/auth/sms', {
+        const smsRes = await fetch('/api/auth/sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code, memberId: claiming.id }),
         });
+        const smsData = await smsRes.json().catch(() => ({}));
         setSentMessage(`${claiming.name.split(' ')[0]} is already set up. We texted the number on file a sign-in link.`);
+        setDevLink(smsData.devLink ?? '');
         setMode('sent');
         return;
       }
@@ -168,12 +176,14 @@ export default function JoinGate({
     setBusy(true);
     setError('');
     try {
-      await fetch('/api/auth/sms', {
+      const res = await fetch('/api/auth/sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, phone: phone.trim() }),
       });
+      const data = await res.json().catch(() => ({}));
       setSentMessage('If that number is in this community, we just texted a sign-in link. Check your texts!');
+      setDevLink(data.devLink ?? '');
       setMode('sent');
     } finally {
       setBusy(false);
@@ -398,6 +408,14 @@ export default function JoinGate({
               The link opens this community signed in as you. You can close this
               window.
             </p>
+            {devLink && (
+              <a
+                href={devLink}
+                className="mt-4 block rounded-2xl bg-navy-100 p-4 text-center text-base font-bold text-navy-800 transition-colors hover:bg-navy-200"
+              >
+                🔧 Dev mode: tap here to sign in
+              </a>
+            )}
           </>
         )}
 
