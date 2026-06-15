@@ -17,9 +17,10 @@ babysitters, handymen, and mechanics they would happily hire again.
   HTML with labels, `aria-live` regions, and visible focus outlines. Pinch
   zoom is never disabled.
 - **Trust over scale.** Every vouch is attached to a real name from your
-  community. One vouch per person per vendor (vouching again updates yours).
-  Invite codes use an unambiguous alphabet (no 0/O or 1/I/L) so they're easy
-  to read over the phone.
+  community and carries optional context tags (e.g. Fair Price, Fast Response)
+  rather than a star rating. One vouch per person per vendor (vouching again
+  updates yours). Invite codes use an unambiguous alphabet (no 0/O or 1/I/L) so
+  they're easy to read over the phone.
 
 ## Tech stack
 
@@ -107,7 +108,8 @@ since that allowlist matches on phone number.
 - `vouch_communities` — id, name, unique invite code
 - `vouch_members` — per-community identity (name + secret token)
 - `vouch_vendors` — name, category, phone, contact, who added them
-- `vouch_vouches` — 1–5 star rating + comment, unique per (vendor, member)
+- `vouch_vouches` — contextual tags (`text[]`, see `lib/tags.ts`) + comment,
+  unique per (vendor, member). The legacy `rating` column is retained but unused.
 
 ## Roadmap ideas
 
