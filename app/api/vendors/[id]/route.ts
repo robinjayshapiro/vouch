@@ -15,13 +15,9 @@ export async function GET(
     id: v.id,
     member_id: v.member_id,
     member_name: v.member_name,
-    rating: v.rating,
+    tags: v.tags,
     comment: v.comment,
     created_at: v.created_at,
   }));
-  const avg =
-    vouches.length > 0
-      ? vouches.reduce((sum, v) => sum + v.rating, 0) / vouches.length
-      : null;
-  return NextResponse.json({ vendor, vouches, avg_rating: avg });
+  return NextResponse.json({ vendor, vouches });
 }

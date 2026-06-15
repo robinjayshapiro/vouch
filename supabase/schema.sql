@@ -47,6 +47,14 @@ create table if not exists vouch_vouches (
 
 create index if not exists vouch_vouches_vendor_idx on vouch_vouches(vendor_id);
 
+-- Contextual tags on a vouch (e.g. 'fair_price', 'fast_response'). Replaces the
+-- 1–5 star rating as the way a voucher conveys *why* they recommend a pro; see
+-- lib/tags.ts for the taxonomy. The old `rating` column is kept (now nullable,
+-- constraint dropped) so existing rows are preserved, but nothing reads it.
+alter table vouch_vouches add column if not exists tags text[] not null default '{}';
+alter table vouch_vouches alter column rating drop not null;
+alter table vouch_vouches drop constraint if exists vouch_vouches_rating_check;
+
 -- Mobile number for cross-device sign-in (SMS magic links). Nullable:
 -- seeded members and name-only joiners have none until they claim one.
 alter table vouch_members add column if not exists phone text;

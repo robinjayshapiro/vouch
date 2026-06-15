@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { VendorWithStats } from '@/types';
 import { getCategory } from '@/lib/categories';
-import { Stars } from '@/components/Stars';
+import { TagChips } from '@/components/Tags';
 
 // "Brett Rosenblatt" -> "Brett R."; single-word names pass through.
 function shortName(full: string): string {
@@ -44,20 +44,19 @@ export default function VendorCard({
           <h3 className="truncate text-lg font-bold text-ink">{vendor.name}</h3>
           <p className="text-base text-soft">{category.label}</p>
           <div className="mt-1 flex items-center gap-2">
-            {vendor.avg_rating != null ? (
-              <>
-                <Stars rating={vendor.avg_rating} size={18} />
-                <span className="text-base text-soft">
-                  {vendor.vouch_count}{' '}
-                  {vendor.vouch_count === 1 ? 'vouch' : 'vouches'}
-                </span>
-              </>
-            ) : (
-              <span className="text-base text-soft">No vouches yet</span>
-            )}
+            <span className="text-base text-soft">
+              {vendor.vouch_count > 0
+                ? `${vendor.vouch_count} ${vendor.vouch_count === 1 ? 'vouch' : 'vouches'}`
+                : 'No vouches yet'}
+            </span>
           </div>
+          {vendor.top_tags.length > 0 && (
+            <div className="mt-2">
+              <TagChips tags={vendor.top_tags.map((t) => t.id)} max={3} size="sm" />
+            </div>
+          )}
           {vouchedBy && (
-            <p className="mt-1 text-sm font-semibold text-navy-600">{vouchedBy}</p>
+            <p className="mt-2 text-sm font-semibold text-navy-600">{vouchedBy}</p>
           )}
           {vendor.latest_comment && (
             <p className="mt-2 line-clamp-2 text-base italic text-soft">

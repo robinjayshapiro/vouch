@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCommunityByCode, getMemberByToken, getVendor, upsertVouch } from '@/lib/db';
+import { sanitizeTags } from '@/lib/tags';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
     code?: string;
     token?: string;
     vendorId?: string;
-    rating?: number;
+    tags?: unknown;
     comment?: string;
   };
   try {
@@ -17,13 +18,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  const rating = Number(body.rating);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    return NextResponse.json(
-      { error: 'Please pick a star rating from 1 to 5.' },
-      { status: 400 }
-    );
-  }
+  // Tags are optional context (the vouch itself is the endorsement).
+  const tags = sanitizeTags(body.tags);
 
   try {
     const community = await getCommunityByCode(body.code ?? '');
@@ -49,7 +45,7 @@ export async function POST(request: Request) {
     }
     const comment = (body.comment ?? '').trim().slice(0, 1000) || null;
 
-    await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+    await upsertVouch({ vendorId: vendor.id, memberId: member.id, tags, comment });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('POST /api/vouches error:', err);
