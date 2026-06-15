@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { JoinPolicy, PendingMember } from '@/types';
+import type { JoinPolicy, PendingMember, SignonMethod } from '@/types';
 
 const POLICY_OPTIONS: { value: JoinPolicy; label: string; help: string }[] = [
   { value: 'open', label: 'Open', help: 'Anyone with the invite link joins instantly.' },
@@ -17,6 +17,24 @@ const POLICY_OPTIONS: { value: JoinPolicy; label: string; help: string }[] = [
   },
 ];
 
+const SIGNON_OPTIONS: { value: SignonMethod; label: string; help: string }[] = [
+  {
+    value: 'phone',
+    label: 'Phone (text)',
+    help: 'Collect a mobile number; sign people back in with a texted link.',
+  },
+  {
+    value: 'email',
+    label: 'Email',
+    help: 'Collect an email; sign people back in with an emailed link.',
+  },
+  {
+    value: 'off',
+    label: 'Off (name only)',
+    help: 'Ask for just a name. No sign-in links — handy for quick, open groups.',
+  },
+];
+
 export default function SettingsPanel({
   code,
   token,
@@ -29,6 +47,7 @@ export default function SettingsPanel({
   onChanged: () => void;
 }) {
   const [policy, setPolicy] = useState<JoinPolicy>('open');
+  const [signon, setSignon] = useState<SignonMethod>('phone');
   const [allowed, setAllowed] = useState<{ id: string; phone: string }[]>([]);
   const [pending, setPending] = useState<PendingMember[]>([]);
   const [paste, setPaste] = useState('');
@@ -43,6 +62,7 @@ export default function SettingsPanel({
     const data = await res.json();
     if (res.ok) {
       setPolicy(data.joinPolicy);
+      setSignon(data.signonMethod);
       setAllowed(data.allowedPhones);
       setPending(data.pendingMembers);
     }
@@ -59,6 +79,16 @@ export default function SettingsPanel({
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, joinPolicy: next }),
+    });
+    onChanged();
+  }
+
+  async function changeSignon(next: SignonMethod) {
+    setSignon(next); // optimistic
+    await fetch(`/api/communities/${code}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, signonMethod: next }),
     });
     onChanged();
   }
@@ -137,6 +167,7 @@ export default function SettingsPanel({
                         <div className="min-w-0">
                           <p className="truncate font-bold text-ink">{m.name}</p>
                           {m.phone && <p className="text-sm text-soft">{m.phone}</p>}
+                          {m.email && <p className="truncate text-sm text-soft">{m.email}</p>}
                         </div>
                         <div className="flex shrink-0 gap-2">
                           <button
@@ -181,6 +212,40 @@ export default function SettingsPanel({
                     </button>
                   ))}
                 </div>
+              </section>
+
+              {/* Sign-on mechanism — independent of the approval policy above. */}
+              <section className="mt-6">
+                <h3 className="text-base font-bold text-ink">How do members sign in?</h3>
+                <p className="mt-0.5 text-sm text-soft">
+                  Sets what newcomers enter and how returning members sign in on a new device.
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {SIGNON_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      onClick={() => changeSignon(o.value)}
+                      aria-pressed={signon === o.value}
+                      className={`rounded-2xl border-2 p-4 text-left transition-colors ${
+                        signon === o.value
+                          ? 'border-navy-600 bg-navy-50'
+                          : 'border-navy-100 bg-white hover:bg-navy-50'
+                      }`}
+                    >
+                      <span className="block text-lg font-bold text-ink">
+                        {signon === o.value ? '● ' : '○ '}
+                        {o.label}
+                      </span>
+                      <span className="mt-0.5 block text-sm text-soft">{o.help}</span>
+                    </button>
+                  ))}
+                </div>
+                {policy === 'approved_list' && signon === 'email' && (
+                  <p className="mt-2 text-sm text-soft">
+                    With the approved phone list on, members enter both a phone (checked
+                    against the list) and an email (used for their sign-in link).
+                  </p>
+                )}
               </section>
 
               {/* Allowlist (relevant to approved_list, manageable anytime) */}

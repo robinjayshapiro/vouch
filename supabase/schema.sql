@@ -51,6 +51,10 @@ create index if not exists vouch_vouches_vendor_idx on vouch_vouches(vendor_id);
 -- seeded members and name-only joiners have none until they claim one.
 alter table vouch_members add column if not exists phone text;
 
+-- Email for cross-device sign-in (Resend magic links). Nullable, mirrors phone:
+-- only collected when a community uses email sign-on (or a member claims one).
+alter table vouch_members add column if not exists email text;
+
 -- Role for moderation. Community creators are 'admin'; everyone else 'member'.
 alter table vouch_members add column if not exists role text not null default 'member';
 
@@ -113,6 +117,15 @@ create index if not exists vouch_request_vendors_request_idx on vouch_request_ve
 --                      instantly; everyone else queues for admin approval
 alter table vouch_communities add column if not exists join_policy text not null default 'open';
 alter table vouch_members add column if not exists status text not null default 'approved';
+
+-- Sign-on mechanism — how members log back in via magic link, INDEPENDENT of
+-- the approval gate above:
+--   'phone' — collect a mobile, sign in by SMS (Twilio); the default
+--   'email' — collect an email, sign in by email (Resend)
+--   'off'   — collect nothing but a name; no magic-link sign-in
+-- A field is required when its mechanism is selected; phone is ALSO required
+-- under the 'approved_list' policy (the allowlist matches on phone).
+alter table vouch_communities add column if not exists signon_method text not null default 'phone';
 
 create table if not exists vouch_allowed_phones (
   id           uuid primary key default gen_random_uuid(),

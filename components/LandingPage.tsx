@@ -21,20 +21,42 @@ export default function LandingPage({
   const [communityName, setCommunityName] = useState('');
   const [yourName, setYourName] = useState('');
   const [yourPhone, setYourPhone] = useState('');
+  const [yourEmail, setYourEmail] = useState('');
   const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  // Some communities require a phone (admin approval / approved-list policies).
-  // When the API tells us so, focus the phone field so the user can supply one
-  // without changing pages.
-  const [phoneRequired, setPhoneRequired] = useState(false);
+  // The community's sign-on config, fetched once the invite code is complete, so
+  // we render exactly the contact field(s) it requires (phone, email, both, or
+  // neither). Phone can be required for the approved-list gate even under email
+  // sign-on; both fields can show at once.
+  const [requirePhone, setRequirePhone] = useState(false);
+  const [requireEmail, setRequireEmail] = useState(false);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
 
-  // When the server tells us the community is gated, focus the phone field
-  // so the user can recover without scrolling around.
+  // Pull the public sign-on config when the code reaches full length.
   useEffect(() => {
-    if (phoneRequired) phoneInputRef.current?.focus();
-  }, [phoneRequired]);
+    const code = joinCode.trim().toUpperCase();
+    if (mode !== 'join' || code.length !== 6) {
+      setRequirePhone(false);
+      setRequireEmail(false);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/communities/${code}/public`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!alive || !res.ok) return;
+        setRequirePhone(!!data.requirePhone);
+        setRequireEmail(!!data.requireEmail);
+      } catch {
+        // Leave fields hidden; the join attempt will surface any requirement.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [joinCode, mode]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -73,23 +95,23 @@ export default function LandingPage({
         body: JSON.stringify({
           name: yourName.trim(),
           phone: yourPhone.trim() || undefined,
+          email: yourEmail.trim() || undefined,
         }),
       });
       const data = await res.json();
-      // Phone already belonged to a member — server texted a sign-in link.
+      // Sign-on contact already belonged to a member — server sent a sign-in link.
       if (res.status === 409 && data.signin) {
-        setError(data.message ?? 'Check your texts for a sign-in link.');
+        setError(data.message ?? 'Check for a sign-in link.');
         setBusy(false);
         return;
       }
       if (!res.ok) {
-        // Phone-required communities: surface the phone field instead of dead-ending.
-        if (
-          res.status === 400 &&
-          typeof data.error === 'string' &&
-          data.error.toLowerCase().includes('mobile number')
-        ) {
-          setPhoneRequired(true);
+        // Required-contact communities: reveal the relevant field instead of
+        // dead-ending (a stale/empty config can miss this up front).
+        if (res.status === 400 && typeof data.error === 'string') {
+          const msg = data.error.toLowerCase();
+          if (msg.includes('email address')) setRequireEmail(true);
+          if (msg.includes('mobile number')) setRequirePhone(true);
         }
         throw new Error(data.error ?? 'Something went wrong.');
       }
@@ -297,31 +319,49 @@ export default function LandingPage({
               className={inputClass}
             />
           </div>
-          <div className="mt-4">
-            <label htmlFor="join-your-phone" className="block text-base font-semibold text-ink">
-              Mobile number{' '}
-              <span className="font-normal text-soft">
-                {phoneRequired ? '(required)' : '(recommended)'}
-              </span>
-            </label>
-            <p className="mt-0.5 text-sm text-soft">
-              {phoneRequired
-                ? 'This community asks for your number to join.'
-                : "Lets you sign in on any device — we'll text you a link."}
-            </p>
-            <input
-              id="join-your-phone"
-              ref={phoneInputRef}
-              type="tel"
-              value={yourPhone}
-              onChange={(e) => setYourPhone(e.target.value)}
-              placeholder="e.g. (555) 123-4567"
-              autoComplete="tel"
-              maxLength={30}
-              required={phoneRequired}
-              className={inputClass}
-            />
-          </div>
+          {requireEmail && (
+            <div className="mt-4">
+              <label htmlFor="join-your-email" className="block text-base font-semibold text-ink">
+                Email address <span className="font-normal text-soft">(required)</span>
+              </label>
+              <p className="mt-0.5 text-sm text-soft">
+                Lets you sign in on any device — we&apos;ll email you a link.
+              </p>
+              <input
+                id="join-your-email"
+                type="email"
+                value={yourEmail}
+                onChange={(e) => setYourEmail(e.target.value)}
+                placeholder="e.g. pat@example.com"
+                autoComplete="email"
+                maxLength={120}
+                required
+                className={inputClass}
+              />
+            </div>
+          )}
+          {requirePhone && (
+            <div className="mt-4">
+              <label htmlFor="join-your-phone" className="block text-base font-semibold text-ink">
+                Mobile number <span className="font-normal text-soft">(required)</span>
+              </label>
+              <p className="mt-0.5 text-sm text-soft">
+                This community asks for your number to join.
+              </p>
+              <input
+                id="join-your-phone"
+                ref={phoneInputRef}
+                type="tel"
+                value={yourPhone}
+                onChange={(e) => setYourPhone(e.target.value)}
+                placeholder="e.g. (555) 123-4567"
+                autoComplete="tel"
+                maxLength={30}
+                required
+                className={inputClass}
+              />
+            </div>
+          )}
           {error && (
             <p role="alert" className="mt-3 text-base font-medium text-coral-700">
               {error}

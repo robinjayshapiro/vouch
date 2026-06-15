@@ -1,17 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import type { MemberSuggestion, StoredMember } from '@/types';
+import { useEffect, useState } from 'react';
+import type { MemberSuggestion, SignonMethod, StoredMember } from '@/types';
 import { storeMember } from '@/lib/identity';
 
-type Mode = 'join' | 'suggestions' | 'claimPhone' | 'signin' | 'sent' | 'pending';
+type Mode = 'loading' | 'join' | 'suggestions' | 'claimContact' | 'signin' | 'sent' | 'pending';
+
+interface PublicConfig {
+  signonMethod: SignonMethod;
+  requirePhone: boolean;
+  requireEmail: boolean;
+}
 
 /**
  * First-open gate for a community. Beyond "type your name," it checks whether
  * the typed name matches someone already in the directory (e.g. a seeded
- * member) and offers to claim that identity by text — so people own the
- * vouches that were entered on their behalf. Returning members can sign in by
- * text from any device.
+ * member) and offers to claim that identity. Returning members can sign in from
+ * any device via a magic link. The contact collected and the sign-in channel
+ * follow the community's sign-on mechanism (phone via SMS, email via Resend, or
+ * off = name only); a phone is also collected when the approved-phone list gates
+ * the community, even under email sign-on.
  */
 export default function JoinGate({
   code,
@@ -22,19 +30,56 @@ export default function JoinGate({
   communityName: string;
   onJoined: (member: StoredMember) => void;
 }) {
-  const [mode, setMode] = useState<Mode>('join');
+  const [config, setConfig] = useState<PublicConfig | null>(null);
+  const [mode, setMode] = useState<Mode>('loading');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const [suggestions, setSuggestions] = useState<MemberSuggestion[]>([]);
   const [claiming, setClaiming] = useState<MemberSuggestion | null>(null);
-  const [claimPhone, setClaimPhone] = useState('');
+  const [claimContact, setClaimContact] = useState('');
   const [sentMessage, setSentMessage] = useState('');
-  // Gated communities require a phone. When the API tells us so, surface the
-  // phone field (back on the join step if we're past it) and mark it required.
-  const [phoneRequired, setPhoneRequired] = useState(false);
+
+  // Load the community's sign-on config up front so we render the right fields.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/communities/${code}/public`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!alive) return;
+        if (res.ok) {
+          setConfig({
+            signonMethod: data.signonMethod,
+            requirePhone: data.requirePhone,
+            requireEmail: data.requireEmail,
+          });
+        } else {
+          setConfig({ signonMethod: 'phone', requirePhone: false, requireEmail: false });
+        }
+        setMode('join');
+      } catch {
+        if (!alive) return;
+        setConfig({ signonMethod: 'phone', requirePhone: false, requireEmail: false });
+        setMode('join');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [code]);
+
+  const channel: SignonMethod = config?.signonMethod ?? 'phone';
+  const showPhone = !!config?.requirePhone;
+  const showEmail = !!config?.requireEmail;
+  const linkSignin = channel !== 'off'; // magic-link sign-in available?
+  const claimByEmail = channel === 'email';
+  // Copy that adapts to the sign-in channel.
+  const channelNoun = claimByEmail ? 'email' : 'texts';
+  const channelVerb = claimByEmail ? 'emailed' : 'texted';
 
   async function joinFresh() {
     setBusy(true);
@@ -43,25 +88,41 @@ export default function JoinGate({
       const res = await fetch(`/api/communities/${code}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+        }),
       });
       const data = await res.json();
-      // Phone already belonged to a member — we texted them a sign-in link.
+      // The sign-on contact already belonged to a member — link was sent.
       if (res.status === 409 && data.signin) {
         setSentMessage(data.message);
         setMode('sent');
         return;
       }
       if (!res.ok) {
-        // Phone-required community: send the user back to the join step with
-        // the phone field marked required, instead of dead-ending on the
-        // suggestions screen where there's nowhere to type a number.
-        if (
-          res.status === 400 &&
-          typeof data.error === 'string' &&
-          data.error.toLowerCase().includes('mobile number')
-        ) {
-          setPhoneRequired(true);
+        // Required-contact community: send the user back to the join step and
+        // make sure the needed field is shown — covers a stale/failed config
+        // fetch that would otherwise leave nowhere to type the contact.
+        if (res.status === 400) {
+          if (typeof data.error === 'string') {
+            const msg = data.error.toLowerCase();
+            if (msg.includes('email address')) {
+              setConfig((c) => ({
+                signonMethod: 'email',
+                requirePhone: c?.requirePhone ?? false,
+                requireEmail: true,
+              }));
+            }
+            if (msg.includes('mobile number')) {
+              setConfig((c) => ({
+                signonMethod: c?.signonMethod ?? 'phone',
+                requirePhone: true,
+                requireEmail: c?.requireEmail ?? false,
+              }));
+            }
+          }
           setMode('join');
         }
         throw new Error(data.error ?? 'Something went wrong.');
@@ -83,6 +144,11 @@ export default function JoinGate({
   async function handleNameSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || busy) return;
+    // Off sign-on has no claim/sign-in path — go straight to a fresh join.
+    if (!linkSignin) {
+      await joinFresh();
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -104,50 +170,55 @@ export default function JoinGate({
     await joinFresh();
   }
 
-  // Chose a suggestion. With a phone on file we text that number; without one,
-  // collect a mobile to attach (seeded-member claim).
+  // Chose a suggestion. With the sign-on contact on file we send a link; without
+  // one, collect it to attach (seeded-member claim).
   async function chooseSuggestion(s: MemberSuggestion) {
     setError('');
-    if (!s.hasPhone) {
+    const hasContact = claimByEmail ? s.hasEmail : s.hasPhone;
+    if (!hasContact) {
       setClaiming(s);
-      setClaimPhone(phone.trim());
-      setMode('claimPhone');
+      setClaimContact(claimByEmail ? email.trim() : phone.trim());
+      setMode('claimContact');
       return;
     }
     setBusy(true);
     try {
-      await fetch('/api/auth/sms', {
+      await fetch('/api/auth/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, memberId: s.id }),
       });
-      setSentMessage(`We texted ${s.name.split(' ')[0]}'s number a sign-in link. Tap it on your phone to finish.`);
+      setSentMessage(
+        `We ${channelVerb} ${s.name.split(' ')[0]}'s ${claimByEmail ? 'email' : 'number'} a sign-in link. Open it to finish.`
+      );
       setMode('sent');
     } finally {
       setBusy(false);
     }
   }
 
-  async function submitClaimPhone(e: React.FormEvent) {
+  async function submitClaimContact(e: React.FormEvent) {
     e.preventDefault();
-    if (!claiming || !claimPhone.trim() || busy) return;
+    if (!claiming || !claimContact.trim() || busy) return;
     setBusy(true);
     setError('');
     try {
       const res = await fetch('/api/auth/claim-by-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, memberId: claiming.id, phone: claimPhone.trim() }),
+        body: JSON.stringify(
+          claimByEmail
+            ? { code, memberId: claiming.id, email: claimContact.trim() }
+            : { code, memberId: claiming.id, phone: claimContact.trim() }
+        ),
       });
       const data = await res.json();
-      // Someone already claimed this identity — verify by text instead.
+      // Someone already claimed this identity — the server sent a link to the
+      // contact on file; just tell the user to check for it.
       if (res.status === 409 && data.alreadyClaimed) {
-        await fetch('/api/auth/sms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, memberId: claiming.id }),
-        });
-        setSentMessage(`${claiming.name.split(' ')[0]} is already set up. We texted the number on file a sign-in link.`);
+        setSentMessage(
+          `${claiming.name.split(' ')[0]} is already set up. We ${channelVerb} the ${claimByEmail ? 'email' : 'number'} on file a sign-in link.`
+        );
         setMode('sent');
         return;
       }
@@ -164,16 +235,21 @@ export default function JoinGate({
 
   async function submitSignin(e: React.FormEvent) {
     e.preventDefault();
-    if (!phone.trim() || busy) return;
+    const value = claimByEmail ? email.trim() : phone.trim();
+    if (!value || busy) return;
     setBusy(true);
     setError('');
     try {
-      await fetch('/api/auth/sms', {
+      await fetch('/api/auth/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, phone: phone.trim() }),
+        body: JSON.stringify(claimByEmail ? { code, email: value } : { code, phone: value }),
       });
-      setSentMessage('If that number is in this community, we just texted a sign-in link. Check your texts!');
+      setSentMessage(
+        claimByEmail
+          ? 'If that email is in this community, we just emailed a sign-in link. Check your inbox!'
+          : 'If that number is in this community, we just texted a sign-in link. Check your texts!'
+      );
       setMode('sent');
     } finally {
       setBusy(false);
@@ -191,6 +267,10 @@ export default function JoinGate({
         aria-labelledby="join-title"
         className="w-full max-w-md rounded-3xl bg-white p-6 shadow-lift"
       >
+        {mode === 'loading' && (
+          <p className="py-10 text-center text-lg text-soft">One sec…</p>
+        )}
+
         {mode === 'join' && (
           <>
             <p className="text-4xl" aria-hidden="true">👋</p>
@@ -216,28 +296,50 @@ export default function JoinGate({
                 required
                 className={inputClass}
               />
-              <label htmlFor="join-phone" className="mt-4 block text-base font-semibold text-ink">
-                Mobile number{' '}
-                <span className="font-normal text-soft">
-                  {phoneRequired ? '(required)' : '(recommended)'}
-                </span>
-              </label>
-              <p className="mt-0.5 text-sm text-soft">
-                {phoneRequired
-                  ? `${communityName} asks for your number to join.`
-                  : "Lets you sign in on any device — we'll text you a link."}
-              </p>
-              <input
-                id="join-phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="e.g. (555) 123-4567"
-                autoComplete="tel"
-                maxLength={30}
-                required={phoneRequired}
-                className={inputClass}
-              />
+              {showEmail && (
+                <>
+                  <label htmlFor="join-email" className="mt-4 block text-base font-semibold text-ink">
+                    Email address <span className="font-normal text-soft">(required)</span>
+                  </label>
+                  <p className="mt-0.5 text-sm text-soft">
+                    Lets you sign in on any device — we&apos;ll email you a link.
+                  </p>
+                  <input
+                    id="join-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. pat@example.com"
+                    autoComplete="email"
+                    maxLength={120}
+                    required
+                    className={inputClass}
+                  />
+                </>
+              )}
+              {showPhone && (
+                <>
+                  <label htmlFor="join-phone" className="mt-4 block text-base font-semibold text-ink">
+                    Mobile number <span className="font-normal text-soft">(required)</span>
+                  </label>
+                  <p className="mt-0.5 text-sm text-soft">
+                    {channel === 'phone'
+                      ? "Lets you sign in on any device — we'll text you a link."
+                      : `${communityName} checks your number against its approved list.`}
+                  </p>
+                  <input
+                    id="join-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. (555) 123-4567"
+                    autoComplete="tel"
+                    maxLength={30}
+                    required
+                    className={inputClass}
+                  />
+                </>
+              )}
               {error && (
                 <p role="alert" className="mt-2 text-base font-medium text-coral-700">
                   {error}
@@ -251,12 +353,14 @@ export default function JoinGate({
                 {busy ? 'One sec…' : 'Join the community'}
               </button>
             </form>
-            <button
-              onClick={() => { setError(''); setMode('signin'); }}
-              className="mt-3 w-full rounded-2xl p-3 text-base font-semibold text-navy-600 hover:text-navy-800"
-            >
-              Been here before? Sign in by text
-            </button>
+            {linkSignin && (
+              <button
+                onClick={() => { setError(''); setMode('signin'); }}
+                className="mt-3 w-full rounded-2xl p-3 text-base font-semibold text-navy-600 hover:text-navy-800"
+              >
+                {claimByEmail ? 'Been here before? Sign in by email' : 'Been here before? Sign in by text'}
+              </button>
+            )}
           </>
         )}
 
@@ -302,36 +406,36 @@ export default function JoinGate({
           </>
         )}
 
-        {mode === 'claimPhone' && claiming && (
+        {mode === 'claimContact' && claiming && (
           <>
-            <p className="text-4xl" aria-hidden="true">📱</p>
+            <p className="text-4xl" aria-hidden="true">{claimByEmail ? '✉️' : '📱'}</p>
             <h2 id="join-title" className="mt-2 text-2xl font-extrabold text-ink">
               Welcome back, {claiming.name.split(' ')[0]}!
             </h2>
             <p className="mt-1 text-lg text-soft">
-              Add your mobile number to claim{' '}
+              Add your {claimByEmail ? 'email' : 'mobile number'} to claim{' '}
               <span className="font-semibold text-ink">{claiming.name}</span> and
               pick up your recommendations. We&apos;ll use it to sign you in on
               other devices.
             </p>
-            <form onSubmit={submitClaimPhone} className="mt-5">
-              <label htmlFor="claim-phone-in" className="block text-base font-semibold text-ink">
-                Your mobile number
+            <form onSubmit={submitClaimContact} className="mt-5">
+              <label htmlFor="claim-contact-in" className="block text-base font-semibold text-ink">
+                Your {claimByEmail ? 'email address' : 'mobile number'}
               </label>
               <input
-                id="claim-phone-in"
-                type="tel"
-                value={claimPhone}
-                onChange={(e) => setClaimPhone(e.target.value)}
-                placeholder="e.g. (555) 123-4567"
-                autoComplete="tel"
-                maxLength={30}
+                id="claim-contact-in"
+                type={claimByEmail ? 'email' : 'tel'}
+                value={claimContact}
+                onChange={(e) => setClaimContact(e.target.value)}
+                placeholder={claimByEmail ? 'e.g. pat@example.com' : 'e.g. (555) 123-4567'}
+                autoComplete={claimByEmail ? 'email' : 'tel'}
+                maxLength={claimByEmail ? 120 : 30}
                 required
                 className={inputClass}
               />
               <button
                 type="submit"
-                disabled={busy || !claimPhone.trim()}
+                disabled={busy || !claimContact.trim()}
                 className="mt-4 w-full rounded-2xl bg-coral-600 p-4 text-lg font-bold text-white transition-colors hover:bg-coral-700 disabled:opacity-50"
               >
                 {busy ? 'One sec…' : 'This is me — take me in'}
@@ -348,34 +452,35 @@ export default function JoinGate({
 
         {mode === 'signin' && (
           <>
-            <p className="text-4xl" aria-hidden="true">📲</p>
+            <p className="text-4xl" aria-hidden="true">{claimByEmail ? '📧' : '📲'}</p>
             <h2 id="join-title" className="mt-2 text-2xl font-extrabold text-ink">
-              Sign in by text
+              {claimByEmail ? 'Sign in by email' : 'Sign in by text'}
             </h2>
             <p className="mt-1 text-lg text-soft">
-              Enter your mobile number and we&apos;ll text you a link to sign in.
+              Enter your {claimByEmail ? 'email address' : 'mobile number'} and we&apos;ll{' '}
+              {claimByEmail ? 'email' : 'text'} you a link to sign in.
             </p>
             <form onSubmit={submitSignin} className="mt-5">
-              <label htmlFor="signin-phone" className="block text-base font-semibold text-ink">
-                Your mobile number
+              <label htmlFor="signin-contact" className="block text-base font-semibold text-ink">
+                Your {claimByEmail ? 'email address' : 'mobile number'}
               </label>
               <input
-                id="signin-phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="e.g. (555) 123-4567"
-                autoComplete="tel"
-                maxLength={30}
+                id="signin-contact"
+                type={claimByEmail ? 'email' : 'tel'}
+                value={claimByEmail ? email : phone}
+                onChange={(e) => (claimByEmail ? setEmail(e.target.value) : setPhone(e.target.value))}
+                placeholder={claimByEmail ? 'e.g. pat@example.com' : 'e.g. (555) 123-4567'}
+                autoComplete={claimByEmail ? 'email' : 'tel'}
+                maxLength={claimByEmail ? 120 : 30}
                 required
                 className={inputClass}
               />
               <button
                 type="submit"
-                disabled={busy || !phone.trim()}
+                disabled={busy || !(claimByEmail ? email.trim() : phone.trim())}
                 className="mt-4 w-full rounded-2xl bg-navy-600 p-4 text-lg font-bold text-white transition-colors hover:bg-navy-700 disabled:opacity-50"
               >
-                {busy ? 'Texting…' : 'Text me a sign-in link'}
+                {busy ? 'Sending…' : claimByEmail ? 'Email me a sign-in link' : 'Text me a sign-in link'}
               </button>
             </form>
             <button
@@ -391,7 +496,7 @@ export default function JoinGate({
           <>
             <p className="text-4xl" aria-hidden="true">✉️</p>
             <h2 id="join-title" className="mt-2 text-2xl font-extrabold text-ink">
-              Check your texts!
+              Check your {channelNoun}!
             </h2>
             <p className="mt-2 text-lg text-soft">{sentMessage}</p>
             <p className="mt-3 text-base text-soft">

@@ -5,12 +5,14 @@ import {
   listAllowedPhones,
   listPendingMembers,
   setJoinPolicy,
+  setSignonMethod,
 } from '@/lib/db';
-import type { JoinPolicy } from '@/types';
+import type { JoinPolicy, SignonMethod } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
 const POLICIES: JoinPolicy[] = ['open', 'admin_approval', 'approved_list'];
+const SIGNON_METHODS: SignonMethod[] = ['off', 'email', 'phone'];
 
 async function requireAdmin(code: string, token: string) {
   const community = await getCommunityByCode(code);
@@ -36,6 +38,7 @@ export async function GET(
     ]);
     return NextResponse.json({
       joinPolicy: r.community.join_policy,
+      signonMethod: r.community.signon_method,
       allowedPhones,
       pendingMembers,
     });
@@ -45,24 +48,32 @@ export async function GET(
   }
 }
 
-// Admin: change the join policy.
+// Admin: change the join policy and/or the sign-on mechanism. Either field may
+// be sent on its own — the two axes are independent.
 export async function PUT(
   request: Request,
   { params }: { params: { code: string } }
 ) {
-  let body: { token?: string; joinPolicy?: JoinPolicy };
+  let body: { token?: string; joinPolicy?: JoinPolicy; signonMethod?: SignonMethod };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
-  if (!body.joinPolicy || !POLICIES.includes(body.joinPolicy)) {
+  if (body.joinPolicy !== undefined && !POLICIES.includes(body.joinPolicy)) {
     return NextResponse.json({ error: 'Invalid join policy.' }, { status: 400 });
+  }
+  if (body.signonMethod !== undefined && !SIGNON_METHODS.includes(body.signonMethod)) {
+    return NextResponse.json({ error: 'Invalid sign-on method.' }, { status: 400 });
+  }
+  if (body.joinPolicy === undefined && body.signonMethod === undefined) {
+    return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 });
   }
   try {
     const r = await requireAdmin(params.code, body.token ?? '');
     if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
-    await setJoinPolicy(r.community.id, body.joinPolicy);
+    if (body.joinPolicy !== undefined) await setJoinPolicy(r.community.id, body.joinPolicy);
+    if (body.signonMethod !== undefined) await setSignonMethod(r.community.id, body.signonMethod);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('PUT /api/communities/[code]/settings error:', err);

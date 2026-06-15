@@ -1,13 +1,9 @@
-// Email delivery for magic sign-in links — an OPTIONAL alternative to SMS,
-// ready to flip on but not yet wired into any flow. Uses Resend's REST API via
-// fetch (no dependency). When RESEND_API_KEY is absent we log instead of send,
-// mirroring lib/sms.ts so the link is followable in dev.
+// Email delivery for magic sign-in links — the email-sign-on alternative to
+// SMS. Uses Resend's REST API via fetch (no dependency). When RESEND_API_KEY or
+// RESEND_FROM is absent we log instead of send, mirroring lib/sms.ts so the link
+// is followable in dev. Channel selection (SMS vs email) lives in lib/signin.ts.
 //
-// To enable email magic links later:
-//   1. Set RESEND_API_KEY and RESEND_FROM (a verified sender) in env.
-//   2. Add an `email` column to vouch_members and collect it at join.
-//   3. Add an email branch to the auth/sms + join flows (or a sibling route)
-//      that calls sendEmail() instead of sendSms().
+// In production, set RESEND_API_KEY and RESEND_FROM (a verified sender) in env.
 
 interface EmailResult {
   delivered: boolean;

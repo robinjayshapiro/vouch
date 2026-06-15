@@ -11,6 +11,7 @@ import type {
   RequestDetail,
   RequestStatus,
   RequestSummary,
+  SignonMethod,
   Vendor,
   VendorEditChanges,
   VendorWithStats,
@@ -23,6 +24,12 @@ import { getCategory, isValidCategory } from '@/lib/categories';
 // last 10 digits so formatting and country-code prefixes don't matter.
 export function phoneDigits(phone: string | null | undefined): string {
   return (phone ?? '').replace(/\D/g, '').slice(-10);
+}
+
+// Emails are matched case-insensitively with surrounding whitespace trimmed,
+// the email analogue of phoneDigits().
+export function normalizeEmail(email: string | null | undefined): string {
+  return (email ?? '').trim().toLowerCase();
 }
 
 let client: SupabaseClient | null = null;
@@ -94,7 +101,8 @@ export async function joinCommunity(
   communityId: string,
   name: string,
   phone?: string | null,
-  status: MemberStatus = 'approved'
+  status: MemberStatus = 'approved',
+  email?: string | null
 ): Promise<Member> {
   const { data, error } = await getClient()
     .from('vouch_members')
@@ -103,6 +111,7 @@ export async function joinCommunity(
       name,
       token: randomUUID(),
       phone: phone?.trim() || null,
+      email: email?.trim() || null,
       status,
     })
     .select()
@@ -120,6 +129,17 @@ export async function setJoinPolicy(
   const { error } = await getClient()
     .from('vouch_communities')
     .update({ join_policy: policy })
+    .eq('id', communityId);
+  if (error) throw new Error(error.message);
+}
+
+export async function setSignonMethod(
+  communityId: string,
+  method: SignonMethod
+): Promise<void> {
+  const { error } = await getClient()
+    .from('vouch_communities')
+    .update({ signon_method: method })
     .eq('id', communityId);
   if (error) throw new Error(error.message);
 }
@@ -195,7 +215,7 @@ export async function listPendingMembers(
 ): Promise<PendingMember[]> {
   const { data, error } = await getClient()
     .from('vouch_members')
-    .select('id, name, phone, created_at')
+    .select('id, name, phone, email, created_at')
     .eq('community_id', communityId)
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
@@ -271,6 +291,21 @@ export async function findMemberByPhone(
   return (data as Member[]).find((m) => phoneDigits(m.phone) === digits);
 }
 
+export async function findMemberByEmail(
+  communityId: string,
+  email: string
+): Promise<Member | undefined> {
+  const needle = normalizeEmail(email);
+  if (!needle.includes('@')) return undefined;
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .select()
+    .eq('community_id', communityId)
+    .not('email', 'is', null);
+  if (error) throw new Error(error.message);
+  return (data as Member[]).find((m) => normalizeEmail(m.email) === needle);
+}
+
 // Name-claim onboarding: surface existing members who might be the person
 // joining. Exact full-name matches rank ahead of first-name matches. Never
 // exposes tokens or phone values — only enough to recognize oneself.
@@ -284,11 +319,11 @@ export async function findMembersByName(
 
   const { data, error } = await getClient()
     .from('vouch_members')
-    .select('id, name, phone, vouch_vouches(member_id)')
+    .select('id, name, phone, email, vouch_vouches(member_id)')
     .eq('community_id', communityId);
   if (error) throw new Error(error.message);
 
-  type Row = { id: string; name: string; phone: string | null; vouch_vouches: unknown[] };
+  type Row = { id: string; name: string; phone: string | null; email: string | null; vouch_vouches: unknown[] };
   const scored = (data as Row[])
     .map((m) => {
       const full = m.name.trim().toLowerCase();
@@ -307,6 +342,7 @@ export async function findMembersByName(
     name: m.name,
     vouchCount: m.vouch_vouches.length,
     hasPhone: !!m.phone,
+    hasEmail: !!m.email,
   }));
 }
 
@@ -321,6 +357,22 @@ export async function setMemberPhone(
     .update({ phone: phone.trim() })
     .eq('id', memberId)
     .is('phone', null)
+    .select('id');
+  if (error) throw new Error(error.message);
+  return (data as unknown[]).length > 0;
+}
+
+// Email analogue of setMemberPhone: first-come, one-shot claim of a seeded
+// member by email under email sign-on. Returns whether it applied.
+export async function setMemberEmail(
+  memberId: string,
+  email: string
+): Promise<boolean> {
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .update({ email: email.trim() })
+    .eq('id', memberId)
+    .is('email', null)
     .select('id');
   if (error) throw new Error(error.message);
   return (data as unknown[]).length > 0;
@@ -354,7 +406,7 @@ export async function createLoginToken(
 // Single-use redemption: marks the token used and returns the member plus the
 // community code/name so the claim page can sign in and redirect.
 export async function redeemLoginToken(token: string): Promise<
-  | { member: Member; community: { code: string; name: string } }
+  | { member: Member; community: { code: string; name: string; signon_method: SignonMethod } }
   | undefined
 > {
   if (!token) return undefined;
@@ -384,11 +436,14 @@ export async function redeemLoginToken(token: string): Promise<
   if (!member) return undefined;
   const { data: comm, error: cErr } = await db
     .from('vouch_communities')
-    .select('code, name')
+    .select('code, name, signon_method')
     .eq('id', member.community_id)
     .single();
   if (cErr) throw new Error(cErr.message);
-  return { member, community: comm as { code: string; name: string } };
+  return {
+    member,
+    community: comm as { code: string; name: string; signon_method: SignonMethod },
+  };
 }
 
 export async function getCommunityStats(communityId: string): Promise<{

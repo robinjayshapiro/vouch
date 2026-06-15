@@ -4,8 +4,9 @@ import { redeemLoginToken } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 // Redeem a magic link. Single-use: returns the member identity (incl. token
-// for localStorage) plus community code/name for redirect. needsPhone tells the
-// claim page whether to offer phone capture (true for members claimed by name).
+// for localStorage) plus community code/name for redirect. needsPhone/needsEmail
+// tell the claim page whether to offer contact capture — true only when the
+// community signs in by that channel and the member has none on file yet.
 export async function POST(request: Request) {
   let body: { token?: string };
   try {
@@ -26,7 +27,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       member: { id: member.id, name: member.name, token: member.token },
       community: { code: community.code, name: community.name },
-      needsPhone: !member.phone,
+      needsPhone: community.signon_method === 'phone' && !member.phone,
+      needsEmail: community.signon_method === 'email' && !member.email,
     });
   } catch (err) {
     console.error('POST /api/auth/claim error:', err);

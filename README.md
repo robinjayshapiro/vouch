@@ -37,6 +37,22 @@ babysitters, handymen, and mechanics they would happily hire again.
    SUPABASE_ANON_KEY=<your-anon-key>
    ```
 
+   Optionally add credentials for the sign-in channels an admin can enable
+   (without them, magic-link messages are logged to the server console so the
+   flow still works in dev):
+
+   ```
+   # Phone sign-on (SMS magic links via Twilio)
+   TWILIO_ACCOUNT_SID=<sid>
+   TWILIO_AUTH_TOKEN=<token>
+   TWILIO_FROM=<your Twilio number or Messaging Service SID>
+   # Email sign-on (magic links via Resend)
+   RESEND_API_KEY=<key>
+   RESEND_FROM=<a verified sender address>
+   # Where claim links point in production
+   APP_URL=https://<your-deployment>
+   ```
+
 2. Run `supabase/schema.sql` in the Supabase SQL editor (one time). Tables
    are prefixed `vouch_` so they can share a database with other projects.
 
@@ -71,6 +87,20 @@ with a private token, stored in `localStorage` per community
 (`vouch_member_{CODE}`). API routes that write data (adding vendors,
 vouching) validate the token server-side. Reading a community requires
 knowing its invite code.
+
+Admins choose a **sign-on mechanism** per community (Settings → "How do members
+sign in?"), independent of the approval policy:
+
+- **Phone** — collect a mobile; returning members sign in via a texted magic
+  link (Twilio).
+- **Email** — collect an email; returning members sign in via an emailed magic
+  link (Resend).
+- **Off** — name only; no magic-link sign-in.
+
+A magic link opened in the same browser restores the member from `localStorage`,
+so there's no re-authentication on that device. A phone is also collected (in
+addition to the sign-on contact) when the **Approved phone list** policy is on,
+since that allowlist matches on phone number.
 
 ### Database schema (see `supabase/schema.sql`)
 

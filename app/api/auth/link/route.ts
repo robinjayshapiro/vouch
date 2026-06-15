@@ -1,21 +1,22 @@
 import { NextResponse } from 'next/server';
 import {
   countActiveLoginTokens,
-  createLoginToken,
+  findMemberByEmail,
   findMemberByPhone,
   getCommunityByCode,
   getMemberById,
 } from '@/lib/db';
-import { appUrl, sendSms, signInMessage } from '@/lib/sms';
+import { sendSignInLink } from '@/lib/signin';
 
 export const dynamic = 'force-dynamic';
 
-// Request a sign-in link by SMS. Caller identifies the member either by phone
-// (returning member on a new device) or by memberId (chose a suggestion that
-// already has a phone on file). We always respond {ok:true} so the endpoint
-// can't be used to probe which numbers/members exist.
+// Request a magic sign-in link. The caller identifies the member by memberId
+// (chose a suggestion already on file), by phone, or by email — whichever the
+// community's sign-on mechanism uses. The link is delivered over the matching
+// channel (SMS or email). We always respond {ok:true} so the endpoint can't be
+// used to probe which members exist.
 export async function POST(request: Request) {
-  let body: { code?: string; phone?: string; memberId?: string };
+  let body: { code?: string; phone?: string; email?: string; memberId?: string };
   try {
     body = await request.json();
   } catch {
@@ -30,23 +31,24 @@ export async function POST(request: Request) {
 
     const member = body.memberId
       ? await getMemberById(body.memberId)
+      : body.email
+      ? await findMemberByEmail(community.id, body.email)
       : body.phone
       ? await findMemberByPhone(community.id, body.phone)
       : undefined;
 
-    // Only text members who belong to this community and have a phone on file.
-    if (member && member.community_id === community.id && member.phone) {
-      // Light rate limit: don't pile up live links for one member.
+    // Only message members who belong to this community. Light rate limit so we
+    // don't pile up live links for one member. sendSignInLink picks the channel
+    // (and no-ops for 'off' or a missing contact on the selected channel).
+    if (member && member.community_id === community.id) {
       if ((await countActiveLoginTokens(member.id)) < 3) {
-        const token = await createLoginToken(member.id, 15);
-        const link = `${appUrl()}/claim/${token}`;
-        await sendSms(member.phone, signInMessage(community.name, link));
+        await sendSignInLink(member, community);
       }
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('POST /api/auth/sms error:', err);
+    console.error('POST /api/auth/link error:', err);
     return NextResponse.json({ error: 'Could not send the link. Please try again.' }, { status: 500 });
   }
 }

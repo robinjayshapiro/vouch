@@ -1,10 +1,14 @@
 export type JoinPolicy = 'open' | 'admin_approval' | 'approved_list';
 
+/** How members log back in via magic link — independent of the approval gate. */
+export type SignonMethod = 'off' | 'email' | 'phone';
+
 export interface Community {
   id: string;
   name: string;
   code: string;
   join_policy: JoinPolicy;
+  signon_method: SignonMethod;
   created_at: string;
 }
 
@@ -17,6 +21,7 @@ export interface Member {
   name: string;
   token: string;
   phone: string | null;
+  email: string | null;
   role: MemberRole;
   status: MemberStatus;
   created_at: string;
@@ -27,6 +32,7 @@ export interface PendingMember {
   id: string;
   name: string;
   phone: string | null;
+  email: string | null;
   created_at: string;
 }
 
@@ -48,12 +54,13 @@ export interface PendingVendorEdit {
   current: { name: string; category: string; phone: string | null; contact: string | null };
 }
 
-/** A possible existing member surfaced during name-claim onboarding. Never carries token/phone. */
+/** A possible existing member surfaced during name-claim onboarding. Never carries token/phone/email. */
 export interface MemberSuggestion {
   id: string;
   name: string;
   vouchCount: number;
   hasPhone: boolean;
+  hasEmail: boolean;
 }
 
 /** What the client stores in localStorage — never includes other members' tokens. */

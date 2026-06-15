@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getCommunityByCode, getMemberByToken, setMemberPhone } from '@/lib/db';
+import {
+  getCommunityByCode,
+  getMemberByToken,
+  setMemberEmail,
+  setMemberPhone,
+} from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// Attach a mobile number to the signed-in member so they can sign in by text
-// later. Used on the claim page when a member arrives via a directly-issued
-// link (e.g. Robin's texted claim links) and has no phone on file yet.
-// Token-validated like every other write; one-shot via setMemberPhone.
+// Attach a contact (mobile or email) to the signed-in member so they can sign
+// in on another device later. Used on the claim page when a member arrives via
+// a directly-issued link and has no contact on the community's sign-on channel
+// yet. Token-validated like every other write; one-shot via setMemberPhone/Email.
 export async function POST(request: Request) {
-  let body: { code?: string; token?: string; phone?: string };
+  let body: { code?: string; token?: string; phone?: string; email?: string };
   try {
     body = await request.json();
   } catch {
@@ -16,8 +21,9 @@ export async function POST(request: Request) {
   }
 
   const phone = (body.phone ?? '').trim();
-  if (!phone) {
-    return NextResponse.json({ error: 'Please enter your mobile number.' }, { status: 400 });
+  const email = (body.email ?? '').trim();
+  if (!phone && !email) {
+    return NextResponse.json({ error: 'Please enter your contact details.' }, { status: 400 });
   }
 
   try {
@@ -32,10 +38,11 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
-    await setMemberPhone(member.id, phone);
+    if (email) await setMemberEmail(member.id, email);
+    else await setMemberPhone(member.id, phone);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('POST /api/auth/phone error:', err);
-    return NextResponse.json({ error: 'Could not save your number. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: 'Could not save your contact. Please try again.' }, { status: 500 });
   }
 }

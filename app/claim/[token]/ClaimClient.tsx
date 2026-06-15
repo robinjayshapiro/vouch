@@ -12,10 +12,11 @@ export default function ClaimClient({ token }: { token: string }) {
   const [community, setCommunity] = useState<{ code: string; name: string } | null>(null);
   const [memberToken, setMemberToken] = useState('');
   const [needsPhone, setNeedsPhone] = useState(false);
+  const [needsEmail, setNeedsEmail] = useState(false);
 
-  const [phone, setPhone] = useState('');
-  const [savingPhone, setSavingPhone] = useState(false);
-  const [phoneSaved, setPhoneSaved] = useState(false);
+  const [contact, setContact] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactSaved, setContactSaved] = useState(false);
   const ranOnce = useRef(false);
 
   const claim = useCallback(async () => {
@@ -36,6 +37,7 @@ export default function ClaimClient({ token }: { token: string }) {
       setMemberToken(data.member.token);
       setCommunity(data.community);
       setNeedsPhone(!!data.needsPhone);
+      setNeedsEmail(!!data.needsEmail);
       setStatus('ready');
     } catch {
       setStatus('expired');
@@ -49,19 +51,23 @@ export default function ClaimClient({ token }: { token: string }) {
     claim();
   }, [claim]);
 
-  async function savePhone(e: React.FormEvent) {
+  async function saveContact(e: React.FormEvent) {
     e.preventDefault();
-    if (savingPhone || !phone.trim() || !community) return;
-    setSavingPhone(true);
+    if (savingContact || !contact.trim() || !community) return;
+    setSavingContact(true);
     try {
       await fetch('/api/auth/phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: community.code, token: memberToken, phone: phone.trim() }),
+        body: JSON.stringify(
+          needsEmail
+            ? { code: community.code, token: memberToken, email: contact.trim() }
+            : { code: community.code, token: memberToken, phone: contact.trim() }
+        ),
       });
-      setPhoneSaved(true);
+      setContactSaved(true);
     } finally {
-      setSavingPhone(false);
+      setSavingContact(false);
     }
   }
 
@@ -104,34 +110,34 @@ export default function ClaimClient({ token }: { token: string }) {
           edit on this device.
         </p>
 
-        {needsPhone && !phoneSaved && (
-          <form onSubmit={savePhone} className="mt-5">
-            <label htmlFor="claim-phone" className="block text-base font-semibold text-ink">
-              Add your mobile so you can sign in next time
+        {(needsPhone || needsEmail) && !contactSaved && (
+          <form onSubmit={saveContact} className="mt-5">
+            <label htmlFor="claim-contact" className="block text-base font-semibold text-ink">
+              Add your {needsEmail ? 'email' : 'mobile'} so you can sign in next time
             </label>
             <input
-              id="claim-phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g. (555) 123-4567"
-              maxLength={30}
-              autoComplete="tel"
+              id="claim-contact"
+              type={needsEmail ? 'email' : 'tel'}
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              placeholder={needsEmail ? 'e.g. pat@example.com' : 'e.g. (555) 123-4567'}
+              maxLength={needsEmail ? 120 : 30}
+              autoComplete={needsEmail ? 'email' : 'tel'}
               className="mt-1.5 w-full rounded-2xl border-2 border-navy-200 bg-white p-4 text-lg text-ink placeholder:text-soft/60 focus:border-navy-500"
             />
             <button
               type="submit"
-              disabled={savingPhone || !phone.trim()}
+              disabled={savingContact || !contact.trim()}
               className="mt-3 w-full rounded-2xl bg-navy-100 p-3 text-base font-bold text-navy-800 transition-colors hover:bg-navy-200 disabled:opacity-50"
             >
-              {savingPhone ? 'Saving…' : 'Save my number'}
+              {savingContact ? 'Saving…' : needsEmail ? 'Save my email' : 'Save my number'}
             </button>
           </form>
         )}
 
-        {phoneSaved && (
+        {contactSaved && (
           <p className="mt-4 rounded-2xl bg-navy-50 p-3 text-center text-base font-semibold text-navy-800">
-            ✅ Saved — you can sign in by text from any device now.
+            ✅ Saved — you can sign in {needsEmail ? 'by email' : 'by text'} from any device now.
           </p>
         )}
 

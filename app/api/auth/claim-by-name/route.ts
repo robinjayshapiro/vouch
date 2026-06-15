@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server';
-import { getCommunityByCode, getMemberById, setMemberPhone } from '@/lib/db';
+import {
+  getCommunityByCode,
+  getMemberById,
+  setMemberEmail,
+  setMemberPhone,
+} from '@/lib/db';
+import { sendSignInLink } from '@/lib/signin';
 
 export const dynamic = 'force-dynamic';
 
 // First-time claim of a seeded member done manually at login: the person
-// recognizes themselves in a suggestion that has no phone yet and supplies
-// their mobile. We attach the phone (first-come, one-shot) and sign them in
-// right here on this device — no delivered link required, so claiming works
-// with no SMS/email provider configured. Honor-system by design, which is
-// fine for a trust circle; the captured phone is what verifies later sign-ins
-// from other devices. If the member already has a phone, someone has claimed
-// them — we refuse and the client routes to "sign in by text".
+// recognizes themselves in a suggestion that has no contact yet and supplies
+// their mobile (phone sign-on) or email (email sign-on). We attach it
+// (first-come, one-shot) and sign them in right here on this device — no
+// delivered link required, so claiming works with no SMS/email provider
+// configured. Honor-system by design, which is fine for a trust circle; the
+// captured contact is what verifies later sign-ins from other devices. If the
+// member already has that contact, someone has claimed them — we refuse and the
+// client routes to "sign in" via the community's channel.
 export async function POST(request: Request) {
-  let body: { code?: string; memberId?: string; phone?: string };
+  let body: { code?: string; memberId?: string; phone?: string; email?: string };
   try {
     body = await request.json();
   } catch {
@@ -20,8 +27,9 @@ export async function POST(request: Request) {
   }
 
   const phone = (body.phone ?? '').trim();
-  if (!phone) {
-    return NextResponse.json({ error: 'Please enter your mobile number.' }, { status: 400 });
+  const email = (body.email ?? '').trim();
+  if (!phone && !email) {
+    return NextResponse.json({ error: 'Please enter your contact details.' }, { status: 400 });
   }
 
   try {
@@ -34,9 +42,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'We could not find that member.' }, { status: 404 });
     }
 
-    const applied = await setMemberPhone(member.id, phone);
+    const applied = email
+      ? await setMemberEmail(member.id, email)
+      : await setMemberPhone(member.id, phone);
     if (!applied) {
-      // Already has a phone — this identity is spoken for. Verify by text.
+      // Already claimed — this identity is spoken for. Verify via the community's
+      // channel using the contact already on file.
+      await sendSignInLink(member, community);
       return NextResponse.json({ alreadyClaimed: true }, { status: 409 });
     }
 
