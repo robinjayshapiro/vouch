@@ -468,7 +468,7 @@ export async function getCommunityStats(communityId: string): Promise<{
 
 interface VendorRow extends Vendor {
   vouch_vouches: {
-    rating: number;
+    tags: string[] | null;
     comment: string | null;
     created_at: string;
     vouch_members: { name: string } | null;
@@ -476,9 +476,9 @@ interface VendorRow extends Vendor {
 }
 
 // Shared select shape + stat mapping so vendor lists and request responses
-// compute counts, average, latest comment, and voucher names identically.
+// compute counts, top tags, latest comment, and voucher names identically.
 const VENDOR_WITH_VOUCHES_SELECT =
-  '*, vouch_vouches(rating, comment, created_at, vouch_members(name))';
+  '*, vouch_vouches(tags, comment, created_at, vouch_members(name))';
 
 function toVendorWithStats({ vouch_vouches, ...vendor }: VendorRow): VendorWithStats {
   const byRecent = [...vouch_vouches].sort((a, b) =>
@@ -486,17 +486,22 @@ function toVendorWithStats({ vouch_vouches, ...vendor }: VendorRow): VendorWithS
   );
   const latest = byRecent.find((w) => w.comment);
   const names: string[] = [];
+  // Aggregate tag usage across every vouch; insertion order keeps ties stable.
+  const tagCounts = new Map<string, number>();
   for (const w of byRecent) {
     const name = w.vouch_members?.name;
     if (name && !names.includes(name)) names.push(name);
+    for (const id of w.tags ?? []) {
+      tagCounts.set(id, (tagCounts.get(id) ?? 0) + 1);
+    }
   }
+  const top_tags = Array.from(tagCounts.entries())
+    .map(([id, count]) => ({ id, count }))
+    .sort((a, b) => b.count - a.count);
   return {
     ...vendor,
     vouch_count: vouch_vouches.length,
-    avg_rating:
-      vouch_vouches.length > 0
-        ? vouch_vouches.reduce((sum, w) => sum + w.rating, 0) / vouch_vouches.length
-        : null,
+    top_tags,
     latest_comment: latest?.comment ?? null,
     voucher_names: names,
   };
@@ -505,7 +510,6 @@ function toVendorWithStats({ vouch_vouches, ...vendor }: VendorRow): VendorWithS
 function sortByTrust(a: VendorWithStats, b: VendorWithStats): number {
   return (
     b.vouch_count - a.vouch_count ||
-    (b.avg_rating ?? 0) - (a.avg_rating ?? 0) ||
     b.created_at.localeCompare(a.created_at)
   );
 }
@@ -730,7 +734,7 @@ export async function listVouches(vendorId: string): Promise<VouchWithMember[]> 
 export async function upsertVouch(input: {
   vendorId: string;
   memberId: string;
-  rating: number;
+  tags: string[];
   comment: string | null;
 }): Promise<void> {
   const { error } = await getClient()
@@ -739,7 +743,7 @@ export async function upsertVouch(input: {
       {
         vendor_id: input.vendorId,
         member_id: input.memberId,
-        rating: input.rating,
+        tags: input.tags,
         comment: input.comment,
         created_at: new Date().toISOString(),
       },

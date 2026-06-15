@@ -10,6 +10,7 @@ import {
   upsertVouch,
 } from '@/lib/db';
 import { isValidCategory } from '@/lib/categories';
+import { sanitizeTags } from '@/lib/tags';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     category?: string;
     phone?: string;
     contact?: string;
-    rating?: number;
+    tags?: unknown;
     comment?: string;
     requestId?: string;
   };
@@ -59,13 +60,8 @@ export async function POST(request: Request) {
   if (!body.category || !isValidCategory(body.category)) {
     return NextResponse.json({ error: 'Please pick a category.' }, { status: 400 });
   }
-  const rating = Number(body.rating);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    return NextResponse.json(
-      { error: 'Please pick a star rating from 1 to 5.' },
-      { status: 400 }
-    );
-  }
+  // Tags are optional context on the first vouch.
+  const tags = sanitizeTags(body.tags);
 
   try {
     const community = await getCommunityByCode(body.code ?? '');
@@ -111,7 +107,7 @@ export async function POST(request: Request) {
       contact,
       addedBy: member.id,
     });
-    await upsertVouch({ vendorId: vendor.id, memberId: member.id, rating, comment });
+    await upsertVouch({ vendorId: vendor.id, memberId: member.id, tags, comment });
 
     // If this vendor was added in response to an "ask the group" request, link it.
     if (body.requestId) {

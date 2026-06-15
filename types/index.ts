@@ -83,7 +83,9 @@ export interface Vendor {
 
 export interface VendorWithStats extends Vendor {
   vouch_count: number;
-  avg_rating: number | null;
+  // Tag ids aggregated across all vouches, most-used first. Drives the chips on
+  // directory cards (replaces the old average star rating).
+  top_tags: { id: string; count: number }[];
   latest_comment: string | null;
   // Names of members who vouched, most recent first (deduped). Drives the
   // "Vouched by …" trust line on directory cards.
@@ -123,7 +125,7 @@ export interface Vouch {
   id: string;
   vendor_id: string;
   member_id: string;
-  rating: number;
+  tags: string[];
   comment: string | null;
   created_at: string;
 }

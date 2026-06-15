@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { StoredMember, Vendor } from '@/types';
 import { getStoredMember } from '@/lib/identity';
 import { getCategory, CATEGORIES_BY_LABEL } from '@/lib/categories';
-import { Stars, StarPicker } from '@/components/Stars';
+import { TagChips, TagPicker } from '@/components/Tags';
 import JoinGate from '@/components/JoinGate';
 import type { VendorEditChanges } from '@/types';
 
@@ -13,9 +13,18 @@ interface VouchView {
   id: string;
   member_id: string;
   member_name: string;
-  rating: number;
+  tags: string[];
   comment: string | null;
   created_at: string;
+}
+
+// Aggregate tag usage across a vendor's vouches, most-used first.
+function topTags(vouches: VouchView[]): string[] {
+  const counts = new Map<string, number>();
+  for (const v of vouches) {
+    for (const id of v.tags) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([id]) => id);
 }
 
 function formatDate(iso: string): string {
@@ -39,11 +48,10 @@ export default function VendorClient({
   const [checkedIdentity, setCheckedIdentity] = useState(false);
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [vouches, setVouches] = useState<VouchView[]>([]);
-  const [avgRating, setAvgRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [formOpen, setFormOpen] = useState(false);
-  const [rating, setRating] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -70,7 +78,6 @@ export default function VendorClient({
     if (res.ok) {
       setVendor(data.vendor);
       setVouches(data.vouches);
-      setAvgRating(data.avg_rating);
     }
     setLoading(false);
   }, [vendorId]);
@@ -84,7 +91,7 @@ export default function VendorClient({
     : undefined;
 
   function openForm() {
-    setRating(myVouch?.rating ?? 0);
+    setTags(myVouch?.tags ?? []);
     setComment(myVouch?.comment ?? '');
     setFormOpen(true);
     setSaved(false);
@@ -94,10 +101,6 @@ export default function VendorClient({
   async function handleVouch(e: React.FormEvent) {
     e.preventDefault();
     if (busy || !member) return;
-    if (rating < 1) {
-      setError('Please tap a star rating.');
-      return;
-    }
     setBusy(true);
     setError('');
     try {
@@ -108,7 +111,7 @@ export default function VendorClient({
           code: community.code,
           token: member.token,
           vendorId,
-          rating,
+          tags,
           comment: comment.trim(),
         }),
       });
@@ -211,13 +214,17 @@ export default function VendorClient({
         </div>
         <h1 className="mt-3 text-3xl font-extrabold text-ink">{vendor.name}</h1>
         <p className="mt-1 text-lg text-soft">{category.label}</p>
-        {avgRating != null && (
-          <div className="mt-2 flex items-center gap-2">
-            <Stars rating={avgRating} size={22} showNumber />
-            <span className="text-base text-soft">
-              · {vouches.length} {vouches.length === 1 ? 'vouch' : 'vouches'}
-            </span>
-          </div>
+        {vouches.length > 0 && (
+          <>
+            <p className="mt-2 text-base font-semibold text-soft">
+              {vouches.length} {vouches.length === 1 ? 'vouch' : 'vouches'}
+            </p>
+            {topTags(vouches).length > 0 && (
+              <div className="mt-2">
+                <TagChips tags={topTags(vouches)} size="sm" />
+              </div>
+            )}
+          </>
         )}
         {(vendor.phone || vendor.contact) && (
           <div className="mt-4 flex flex-col gap-2">
@@ -363,10 +370,13 @@ export default function VendorClient({
           <h2 className="text-xl font-bold text-ink">
             {myVouch ? 'Update your vouch' : `Vouch for ${vendor.name}`}
           </h2>
-          <div className="mt-3">
-            <StarPicker value={rating} onChange={setRating} />
+          <p className="mt-3 text-base font-semibold text-ink">
+            What stood out? <span className="font-normal text-soft">(optional)</span>
+          </p>
+          <div className="mt-2">
+            <TagPicker value={tags} onChange={setTags} />
           </div>
-          <label htmlFor="vouch-comment" className="mt-3 block text-base font-semibold text-ink">
+          <label htmlFor="vouch-comment" className="mt-4 block text-base font-semibold text-ink">
             What should your neighbors know?{' '}
             <span className="font-normal text-soft">(optional)</span>
           </label>
@@ -410,17 +420,19 @@ export default function VendorClient({
         <div className="mt-3 flex flex-col gap-3">
           {vouches.map((v) => (
             <article key={v.id} className="rounded-2xl bg-white p-4 shadow-card">
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-bold text-ink">
-                  {v.member_name}
-                  {member && v.member_id === member.id && (
-                    <span className="ml-2 rounded-full bg-coral-100 px-2 py-0.5 text-sm font-semibold text-coral-800">
-                      You
-                    </span>
-                  )}
-                </p>
-                <Stars rating={v.rating} size={16} />
-              </div>
+              <p className="font-bold text-ink">
+                {v.member_name}
+                {member && v.member_id === member.id && (
+                  <span className="ml-2 rounded-full bg-coral-100 px-2 py-0.5 text-sm font-semibold text-coral-800">
+                    You
+                  </span>
+                )}
+              </p>
+              {v.tags.length > 0 && (
+                <div className="mt-2">
+                  <TagChips tags={v.tags} size="sm" />
+                </div>
+              )}
               {v.comment && (
                 <p className="mt-2 text-base text-ink">{v.comment}</p>
               )}

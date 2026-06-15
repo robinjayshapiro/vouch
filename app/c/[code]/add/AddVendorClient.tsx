@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { StoredMember } from '@/types';
 import { getStoredMember } from '@/lib/identity';
 import { CATEGORIES_BY_LABEL } from '@/lib/categories';
-import { StarPicker } from '@/components/Stars';
+import { TagPicker } from '@/components/Tags';
 import JoinGate from '@/components/JoinGate';
 
 export default function AddVendorClient({
@@ -21,7 +21,7 @@ export default function AddVendorClient({
   const [category, setCategory] = useState('');
   const [phone, setPhone] = useState('');
   const [contact, setContact] = useState('');
-  const [rating, setRating] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -47,10 +47,6 @@ export default function AddVendorClient({
       setError('Please pick what kind of help they provide.');
       return;
     }
-    if (rating < 1) {
-      setError('Please tap a star rating — it helps your neighbors.');
-      return;
-    }
     setBusy(true);
     setError('');
     setDuplicate(null);
@@ -65,7 +61,7 @@ export default function AddVendorClient({
           category,
           phone: phone.trim(),
           contact: contact.trim(),
-          rating,
+          tags,
           comment: comment.trim(),
           requestId: requestId || undefined,
         }),
@@ -183,9 +179,15 @@ export default function AddVendorClient({
         </div>
 
         <div>
-          <p className="text-lg font-semibold text-ink">How would you rate them?</p>
+          <p className="text-lg font-semibold text-ink">
+            What stood out?{' '}
+            <span className="font-normal text-soft">(optional)</span>
+          </p>
+          <p className="mt-0.5 text-base text-soft">
+            Tap any that fit — they help neighbors see why you vouch.
+          </p>
           <div className="mt-2">
-            <StarPicker value={rating} onChange={setRating} />
+            <TagPicker value={tags} onChange={setTags} />
           </div>
         </div>
 
