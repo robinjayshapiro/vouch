@@ -48,8 +48,11 @@ export async function POST(request: Request) {
     if (!applied) {
       // Already claimed — this identity is spoken for. Verify via the community's
       // channel using the contact already on file.
-      await sendSignInLink(member, community);
-      return NextResponse.json({ alreadyClaimed: true }, { status: 409 });
+      const { devLink } = await sendSignInLink(member, community);
+      return NextResponse.json(
+        { alreadyClaimed: true, ...(devLink && { devLink }) },
+        { status: 409 }
+      );
     }
 
     // Signed in immediately on this device.

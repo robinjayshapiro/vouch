@@ -42,6 +42,9 @@ export default function JoinGate({
   const [claiming, setClaiming] = useState<MemberSuggestion | null>(null);
   const [claimContact, setClaimContact] = useState('');
   const [sentMessage, setSentMessage] = useState('');
+  // In local dev with no SMS/email provider, the API hands back the sign-in link
+  // so we can show a tappable shortcut instead of forcing a trip to the logs.
+  const [devLink, setDevLink] = useState('');
 
   // Load the community's sign-on config up front so we render the right fields.
   useEffect(() => {
@@ -98,6 +101,7 @@ export default function JoinGate({
       // The sign-on contact already belonged to a member — link was sent.
       if (res.status === 409 && data.signin) {
         setSentMessage(data.message);
+        setDevLink(data.devLink ?? '');
         setMode('sent');
         return;
       }
@@ -183,14 +187,16 @@ export default function JoinGate({
     }
     setBusy(true);
     try {
-      await fetch('/api/auth/link', {
+      const res = await fetch('/api/auth/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, memberId: s.id }),
       });
+      const data = await res.json().catch(() => ({}));
       setSentMessage(
         `We ${channelVerb} ${s.name.split(' ')[0]}'s ${claimByEmail ? 'email' : 'number'} a sign-in link. Open it to finish.`
       );
+      setDevLink(data.devLink ?? '');
       setMode('sent');
     } finally {
       setBusy(false);
@@ -219,6 +225,7 @@ export default function JoinGate({
         setSentMessage(
           `${claiming.name.split(' ')[0]} is already set up. We ${channelVerb} the ${claimByEmail ? 'email' : 'number'} on file a sign-in link.`
         );
+        setDevLink(data.devLink ?? '');
         setMode('sent');
         return;
       }
@@ -240,16 +247,18 @@ export default function JoinGate({
     setBusy(true);
     setError('');
     try {
-      await fetch('/api/auth/link', {
+      const res = await fetch('/api/auth/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(claimByEmail ? { code, email: value } : { code, phone: value }),
       });
+      const data = await res.json().catch(() => ({}));
       setSentMessage(
         claimByEmail
           ? 'If that email is in this community, we just emailed a sign-in link. Check your inbox!'
           : 'If that number is in this community, we just texted a sign-in link. Check your texts!'
       );
+      setDevLink(data.devLink ?? '');
       setMode('sent');
     } finally {
       setBusy(false);
@@ -503,6 +512,14 @@ export default function JoinGate({
               The link opens this community signed in as you. You can close this
               window.
             </p>
+            {devLink && (
+              <a
+                href={devLink}
+                className="mt-4 block w-full rounded-2xl bg-navy-100 p-3 text-center text-base font-bold text-navy-800 transition-colors hover:bg-navy-200"
+              >
+                Dev mode: tap here to sign in
+              </a>
+            )}
           </>
         )}
 
