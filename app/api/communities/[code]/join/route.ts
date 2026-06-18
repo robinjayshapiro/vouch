@@ -63,12 +63,13 @@ export async function POST(
     if (community.signon_method === 'email' && email) {
       const existing = await findMemberByEmail(community.id, email);
       if (existing) {
-        await sendSignInLink(existing, community);
+        const { devLink } = await sendSignInLink(existing, community);
         return NextResponse.json(
           {
             signin: true,
             name: existing.name,
             message: `That email is already registered to ${existing.name}. We just emailed a sign-in link.`,
+            ...(devLink && { devLink }),
           },
           { status: 409 }
         );
@@ -76,12 +77,13 @@ export async function POST(
     } else if (community.signon_method === 'phone' && phone) {
       const existing = await findMemberByPhone(community.id, phone);
       if (existing) {
-        await sendSignInLink(existing, community);
+        const { devLink } = await sendSignInLink(existing, community);
         return NextResponse.json(
           {
             signin: true,
             name: existing.name,
             message: `That number is already registered to ${existing.name}. We just texted a sign-in link.`,
+            ...(devLink && { devLink }),
           },
           { status: 409 }
         );

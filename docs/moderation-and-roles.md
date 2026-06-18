@@ -1,8 +1,18 @@
-# Roles & Moderation — design
+# Roles & Moderation — as-built
 
-Status: **design only, not yet implemented.** Captures what's needed to let
-members fix vendor details (feature idea #3) without letting anyone silently
-rewrite shared data. Written so it can be picked up cleanly later.
+Status: **implemented.** This started as a design note and now records the
+shipped behavior: members can propose edits to vendor core fields, and admins
+approve/decline them, without letting anyone silently rewrite shared data.
+
+As-built map:
+- **Admin role** — `vouch_members.role` (`'admin' | 'member'`); community creators
+  are admins (`lib/db.ts::createCommunity`).
+- **Proposed edits** — `vouch_vendor_edits` table; `proposeVendorEdit` /
+  `listPendingEdits` / `reviewVendorEdit` in `lib/db.ts`.
+- **APIs** — `app/api/vendors/[id]/edit/` (propose) and
+  `app/api/moderation/[id]/` (approve/decline).
+- **UI** — `app/c/[code]/ModerationPanel.tsx` (admin review queue) and the
+  "Suggest an edit" form in `app/c/[code]/v/[id]/VendorClient.tsx`.
 
 ## The problem
 

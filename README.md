@@ -111,6 +111,31 @@ since that allowlist matches on phone number.
 - `vouch_vouches` — contextual tags (`text[]`, see `lib/tags.ts`) + comment,
   unique per (vendor, member). The legacy `rating` column is retained but unused.
 
+## Known limitations
+
+- **Cross-device sign-in needs a delivery channel.** Returning members (and
+  anyone joining a restricted community) sign in via a magic link sent over the
+  community's sign-on channel — SMS (Twilio) or email (Resend). Without that
+  provider configured the link can't be delivered; in local dev it's logged to
+  the server console *and* surfaced as a "Dev mode: tap here to sign in" shortcut
+  (never in production). On the device you originally joined from, no link is
+  needed — your identity is already in `localStorage`.
+- **Claiming a seeded identity is honor-system.** If vouches were added under
+  your name before you joined, anyone who types that name can claim the record by
+  attaching a phone/email — the *first* claim isn't verified. An intentional
+  trade-off for low-friction onboarding in a trust circle; the captured contact
+  secures every sign-in afterward.
+- **The directory loads behind the join gate.** For a non-member, vendor data is
+  fetched into the DOM beneath the join modal. Access is scoped by knowing the
+  invite code, not by hiding markup — fine for an invite-semi-public directory,
+  not a hard paywall.
+- **Pending members can open the add/vouch forms by direct link.** The directory
+  shows pending members a wait screen, but visiting `/c/[code]/add` or a vendor
+  page directly still renders the form; the write is rejected server-side (403)
+  on submit rather than gated up front.
+- **No self-service account or community management yet.** There's no way to
+  leave a community or delete one; cleanup is a manual database operation.
+
 ## Roadmap ideas
 
 - Share links with the code embedded (`/join/CODE`)

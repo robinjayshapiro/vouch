@@ -25,6 +25,8 @@ export default function LandingPage({
   const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Local-dev sign-in shortcut returned by the API when no provider is configured.
+  const [devLink, setDevLink] = useState('');
   // The community's sign-on config, fetched once the invite code is complete, so
   // we render exactly the contact field(s) it requires (phone, email, both, or
   // neither). Phone can be required for the approved-list gate even under email
@@ -102,6 +104,7 @@ export default function LandingPage({
       // Sign-on contact already belonged to a member — server sent a sign-in link.
       if (res.status === 409 && data.signin) {
         setError(data.message ?? 'Check for a sign-in link.');
+        setDevLink(data.devLink ?? '');
         setBusy(false);
         return;
       }
@@ -366,6 +369,14 @@ export default function LandingPage({
             <p role="alert" className="mt-3 text-base font-medium text-coral-700">
               {error}
             </p>
+          )}
+          {devLink && (
+            <a
+              href={devLink}
+              className="mt-3 block w-full rounded-2xl bg-navy-100 p-3 text-center text-base font-bold text-navy-800 transition-colors hover:bg-navy-200"
+            >
+              Dev mode: tap here to sign in
+            </a>
           )}
           <button type="submit" disabled={busy} className={buttonClass}>
             {busy ? 'Joining…' : 'Join community'}

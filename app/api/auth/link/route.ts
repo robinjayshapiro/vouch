@@ -40,13 +40,16 @@ export async function POST(request: Request) {
     // Only message members who belong to this community. Light rate limit so we
     // don't pile up live links for one member. sendSignInLink picks the channel
     // (and no-ops for 'off' or a missing contact on the selected channel).
+    let devLink: string | null = null;
     if (member && member.community_id === community.id) {
       if ((await countActiveLoginTokens(member.id)) < 3) {
-        await sendSignInLink(member, community);
+        ({ devLink } = await sendSignInLink(member, community));
       }
     }
 
-    return NextResponse.json({ ok: true });
+    // devLink is only populated in local dev (no provider), so this still can't
+    // be used to probe which members exist in production.
+    return NextResponse.json({ ok: true, ...(devLink && { devLink }) });
   } catch (err) {
     console.error('POST /api/auth/link error:', err);
     return NextResponse.json({ error: 'Could not send the link. Please try again.' }, { status: 500 });
