@@ -250,6 +250,17 @@ export async function declineMember(
   if (error) throw new Error(error.message);
 }
 
+export async function listAdmins(communityId: string): Promise<Member[]> {
+  const { data, error } = await getClient()
+    .from('vouch_members')
+    .select()
+    .eq('community_id', communityId)
+    .eq('role', 'admin')
+    .eq('status', 'approved');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Member[];
+}
+
 export async function getMemberByToken(
   communityId: string,
   token: string

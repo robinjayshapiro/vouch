@@ -8,6 +8,7 @@ import {
 } from '@/lib/db';
 import { contactRequirements } from '@/lib/gating';
 import { sendSignInLink } from '@/lib/signin';
+import { notifyAdminsOfJoinRequest } from '@/lib/notify';
 import type { MemberStatus } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -99,6 +100,12 @@ export async function POST(
     }
 
     const member = await joinCommunity(community.id, name, phone, status, email);
+
+    // If they landed in the queue, ping admins so they don't miss the request.
+    if (status === 'pending') {
+      notifyAdminsOfJoinRequest(community, name);
+    }
+
     return NextResponse.json({
       community: { id: community.id, name: community.name, code: community.code },
       member: { id: member.id, name: member.name, token: member.token },
