@@ -392,7 +392,14 @@ export default function LandingPage({
       )}
 
       <footer className="mt-auto pt-10 text-center text-sm text-soft">
-        No passwords. No ads. Just people you trust.
+        <p>No passwords. No ads. Just people you trust.</p>
+        <nav aria-label="Vouch information" className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2">
+          <a href="/about" className="font-semibold text-navy-600 underline">About</a>
+          <a href="/privacy" className="font-semibold text-navy-600 underline">Privacy</a>
+          <a href="/terms" className="font-semibold text-navy-600 underline">Terms</a>
+          <a href="/contact" className="font-semibold text-navy-600 underline">Contact</a>
+          <a href="/security" className="font-semibold text-navy-600 underline">Security</a>
+        </nav>
       </footer>
     </main>
   );
