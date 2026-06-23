@@ -103,6 +103,13 @@ so there's no re-authentication on that device. A phone is also collected (in
 addition to the sign-on contact) when the **Approved phone list** policy is on,
 since that allowlist matches on phone number.
 
+**Membership notifications** (sent over the community's sign-on channel, see
+`lib/notify.ts`): when a join lands in the approval queue, admins are notified
+that someone is waiting; when an admin approves a member, that member is sent a
+sign-in link that doubles as their welcome — so approval and cross-device access
+become the same action. Both are best-effort: a delivery failure is logged but
+never blocks the join or the approval.
+
 ### Database schema (see `supabase/schema.sql`)
 
 - `vouch_communities` — id, name, unique invite code
@@ -135,6 +142,15 @@ since that allowlist matches on phone number.
   on submit rather than gated up front.
 - **No self-service account or community management yet.** There's no way to
   leave a community or delete one; cleanup is a manual database operation.
+
+## Action items
+
+- **Polish the transactional email/SMS copy.** The subject lines and bodies in
+  `lib/email.ts` and `lib/sms.ts` (sign-in, approval, admin-pending) are
+  functional but plain — they read as developer placeholders. Revisit voice,
+  subject lines, and formatting (and consider HTML email for the Resend path,
+  which currently sends plain text) so the first message a new member receives
+  feels finished.
 
 ## Roadmap ideas
 
