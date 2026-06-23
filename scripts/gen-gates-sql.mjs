@@ -64,7 +64,16 @@ out.push('');
 // Vendors (dedup by phone) + vouches.
 const seenPhones = new Map(); // digits -> vendor id
 const vendorValues = [];
-const vouchValues = [];
+// vouch_vouches is unique on (vendor_id, member_id): if the same recommender
+// lists the same (deduped) vendor twice, collapse to one vouch and merge the
+// comments so no note is lost.
+const vouches = new Map(); // `${vendorId}|${memberId}` -> Set<comment>
+function addVouch(vendorId, memberId, comment) {
+  const key = `${vendorId}|${memberId}`;
+  if (!vouches.has(key)) vouches.set(key, { vendorId, memberId, comments: new Set() });
+  if (comment) vouches.get(key).comments.add(comment);
+}
+
 for (const r of rows) {
   const memberName = r.recommender || 'Gates Directory';
   const memberId = memberIds.get(memberName);
@@ -77,7 +86,7 @@ for (const r of rows) {
   const d = digits(r.phone);
   if (d.length >= 7 && seenPhones.has(d)) {
     // Same number already listed — attach this person's vouch to that vendor.
-    vouchValues.push(`  (${q(seenPhones.get(d))}, ${q(memberId)}, '{}', ${q(comment)})`);
+    addVouch(seenPhones.get(d), memberId, comment);
     continue;
   }
 
@@ -86,8 +95,12 @@ for (const r of rows) {
   vendorValues.push(
     `  (${q(vid)}, ${q(cid)}, ${q(vendorName)}, ${q(mapType(r.type))}, ${q(r.phone)}, NULL, ${q(memberId)})`
   );
-  vouchValues.push(`  (${q(vid)}, ${q(memberId)}, '{}', ${q(comment)})`);
+  addVouch(vid, memberId, comment);
 }
+
+const vouchValues = [...vouches.values()].map(
+  (v) => `  (${q(v.vendorId)}, ${q(v.memberId)}, '{}', ${q([...v.comments].join(' ') || null)})`
+);
 
 out.push('-- Vendors (deduped by phone)');
 out.push(
