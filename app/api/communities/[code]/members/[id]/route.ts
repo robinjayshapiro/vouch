@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import {
   declineMember,
   getCommunityByCode,
+  getMemberById,
   getMemberByToken,
   setMemberStatus,
 } from '@/lib/db';
+import { notifyMemberApproved } from '@/lib/notify';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +35,9 @@ export async function POST(
     }
     if (body.action === 'approve') {
       await setMemberStatus(community.id, params.id, 'approved');
+      // Notify the member they're in — the sign-in link doubles as their welcome.
+      const approved = await getMemberById(params.id);
+      if (approved) notifyMemberApproved(approved, community);
     } else {
       await declineMember(community.id, params.id);
     }

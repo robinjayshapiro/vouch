@@ -54,6 +54,7 @@ export default function SettingsPanel({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/communities/${code}/settings?token=${token}`, {
@@ -73,24 +74,45 @@ export default function SettingsPanel({
     load();
   }, [load]);
 
+  // Save a settings change. Optimistically reflect it, but if the server
+  // rejects it (e.g. a missing column or a permissions error), surface the
+  // failure and resync from the server instead of leaving the UI showing a
+  // value that didn't actually persist.
+  async function saveSettings(
+    patch: { joinPolicy?: JoinPolicy; signonMethod?: SignonMethod }
+  ): Promise<boolean> {
+    setSaveError('');
+    try {
+      const res = await fetch(`/api/communities/${code}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, ...patch }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSaveError(data.error ?? 'Could not save that change. Please try again.');
+        await load(); // resync so the buttons reflect what actually stuck
+        return false;
+      }
+      onChanged();
+      return true;
+    } catch {
+      setSaveError('Could not save that change. Please try again.');
+      await load();
+      return false;
+    }
+  }
+
   async function changePolicy(next: JoinPolicy) {
+    const prev = policy;
     setPolicy(next); // optimistic
-    await fetch(`/api/communities/${code}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, joinPolicy: next }),
-    });
-    onChanged();
+    if (!(await saveSettings({ joinPolicy: next }))) setPolicy(prev);
   }
 
   async function changeSignon(next: SignonMethod) {
+    const prev = signon;
     setSignon(next); // optimistic
-    await fetch(`/api/communities/${code}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, signonMethod: next }),
-    });
-    onChanged();
+    if (!(await saveSettings({ signonMethod: next }))) setSignon(prev);
   }
 
   async function addPhones() {
@@ -244,6 +266,11 @@ export default function SettingsPanel({
                   <p className="mt-2 text-sm text-soft">
                     With the approved phone list on, members enter both a phone (checked
                     against the list) and an email (used for their sign-in link).
+                  </p>
+                )}
+                {saveError && (
+                  <p role="alert" className="mt-2 text-sm font-medium text-coral-700">
+                    {saveError}
                   </p>
                 )}
               </section>

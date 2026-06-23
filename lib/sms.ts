@@ -51,6 +51,16 @@ export function signInMessage(communityName: string, link: string): string {
   return `Tap to sign in to ${communityName} on Vouch: ${link}`;
 }
 
+/** Approval SMS — link is both welcome and sign-in. */
+export function approvalMessage(communityName: string, link: string): string {
+  return `You're in! Your request to join ${communityName} on Vouch was approved. Tap to open the directory: ${link}`;
+}
+
+/** Notifies an admin that someone is waiting for approval. */
+export function adminPendingMessage(communityName: string, joinerName: string, reviewUrl: string): string {
+  return `${joinerName} wants to join ${communityName} on Vouch. Review at: ${reviewUrl}`;
+}
+
 /** Where claim links point. APP_URL should be the deployed origin in prod. */
 export function appUrl(): string {
   return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '');

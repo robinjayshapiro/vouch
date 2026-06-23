@@ -49,3 +49,26 @@ export function signInEmail(
     text: `Tap to sign in to ${communityName} on Vouch:\n\n${link}\n\nThis link works once and expires shortly.`,
   };
 }
+
+/** Approval notification — the link doubles as both welcome and sign-in. */
+export function approvalEmail(
+  communityName: string,
+  link: string
+): { subject: string; text: string } {
+  return {
+    subject: `You're in — welcome to ${communityName}!`,
+    text: `Good news — your request to join ${communityName} on Vouch was approved.\n\nTap to open the directory:\n\n${link}\n\nThis link works once. After that, sign in the same way you joined.`,
+  };
+}
+
+/** Notifies an admin that someone is waiting for approval. */
+export function adminPendingEmail(
+  communityName: string,
+  joinerName: string,
+  reviewUrl: string
+): { subject: string; text: string } {
+  return {
+    subject: `${joinerName} wants to join ${communityName}`,
+    text: `${joinerName} asked to join ${communityName} on Vouch and is waiting for your approval.\n\nReview pending members:\n\n${reviewUrl}`,
+  };
+}
