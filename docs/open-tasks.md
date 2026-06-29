@@ -55,6 +55,26 @@ No Sentry or Vercel Log Drains set up. Notification failures (`lib/notify.ts`) a
 currently logged via `console.error` and silently swallowed — fine for now but will be
 invisible in production at scale.
 
+### In-app messaging between members
+Let members DM each other inside a community without exchanging phone numbers. Needs a
+`vouch_messages` table (sender_id, recipient_id, community_id, body, created_at), a
+conversation thread UI, and a notification path (email/SMS to the recipient if they have
+a contact on file). Significant feature — design data model before implementing.
+
+### Display-name privacy (first name + last initial)
+Members sign up with their full name but may prefer to appear publicly as "Robin S."
+Two modes to consider:
+- **User-controlled**: each member sets their own display preference.
+- **Admin-enforced**: community admin requires everyone to appear as first + last initial
+  (trust vs. privacy trade-off).
+Needs a `display_name` column on `vouch_members` (nullable; full name used if null), and
+a setting in `SettingsPanel` for the community-wide enforcement toggle.
+
+### "My communities" on the homepage
+Landing page could list communities the visitor has already joined (read from localStorage)
+with a one-tap link back. No server call needed — tokens are stored client-side under
+`vouch_member_{CODE}`. Small addition to `LandingPage.tsx`.
+
 ---
 
 ## Minor / housekeeping
