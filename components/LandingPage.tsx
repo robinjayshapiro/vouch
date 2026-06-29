@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { storeMember } from '@/lib/identity';
+import { getStoredCommunities, storeMember } from '@/lib/identity';
+import type { StoredCommunity } from '@/lib/identity';
 
 type Mode = 'home' | 'create' | 'join';
 
@@ -33,7 +35,13 @@ export default function LandingPage({
   // sign-on; both fields can show at once.
   const [requirePhone, setRequirePhone] = useState(false);
   const [requireEmail, setRequireEmail] = useState(false);
+  const [fetchedCommunityName, setFetchedCommunityName] = useState('');
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const [storedCommunities, setStoredCommunities] = useState<StoredCommunity[]>([]);
+
+  useEffect(() => {
+    setStoredCommunities(getStoredCommunities());
+  }, []);
 
   // Pull the public sign-on config when the code reaches full length.
   useEffect(() => {
@@ -41,6 +49,7 @@ export default function LandingPage({
     if (mode !== 'join' || code.length !== 6) {
       setRequirePhone(false);
       setRequireEmail(false);
+      setFetchedCommunityName('');
       return;
     }
     let alive = true;
@@ -51,6 +60,7 @@ export default function LandingPage({
         if (!alive || !res.ok) return;
         setRequirePhone(!!data.requirePhone);
         setRequireEmail(!!data.requireEmail);
+        setFetchedCommunityName(data.name ?? '');
       } catch {
         // Leave fields hidden; the join attempt will surface any requirement.
       }
@@ -76,7 +86,7 @@ export default function LandingPage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong.');
-      storeMember(data.community.code, data.member);
+      storeMember(data.community.code, { ...data.member, communityName: data.community.name });
       router.push(`/c/${data.community.code}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -118,7 +128,10 @@ export default function LandingPage({
         }
         throw new Error(data.error ?? 'Something went wrong.');
       }
-      storeMember(code, data.member);
+      storeMember(code, {
+        ...data.member,
+        communityName: data.community?.name ?? fetchedCommunityName ?? invitedTo ?? code,
+      });
       // Gated communities may park the join in "pending" until an admin approves.
       // The community page handles the pending UI; just route there.
       router.push(`/c/${code}`);
@@ -155,6 +168,26 @@ export default function LandingPage({
 
       {mode === 'home' && (
         <div className="mt-10 flex flex-col gap-4">
+          {storedCommunities.length > 0 && (
+            <div>
+              <h2 className="mb-2 text-base font-bold text-navy-700">Your communities</h2>
+              <div className="flex flex-col gap-2">
+                {storedCommunities.map((c) => (
+                  <Link
+                    key={c.code}
+                    href={`/c/${c.code}`}
+                    className="flex items-center justify-between rounded-3xl border-2 border-navy-200 bg-white p-5 shadow-card transition-shadow hover:shadow-lift"
+                  >
+                    <span>
+                      <span className="block text-lg font-bold text-navy-800">{c.communityName}</span>
+                      <span className="mt-0.5 block text-sm text-soft">Signed in as {c.memberName}</span>
+                    </span>
+                    <span className="shrink-0 text-base font-semibold text-navy-600">Open →</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             onClick={() => {
               setMode('create');

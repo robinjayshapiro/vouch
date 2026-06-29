@@ -68,6 +68,7 @@ export interface StoredMember {
   id: string;
   name: string;
   token: string;
+  communityName?: string;
 }
 
 export interface Vendor {

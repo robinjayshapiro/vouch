@@ -32,7 +32,7 @@ export default function ClaimClient({ token }: { token: string }) {
         return;
       }
       // Restore identity on this device, then we're signed in.
-      storeMember(data.community.code, data.member);
+      storeMember(data.community.code, { ...data.member, communityName: data.community.name });
       setName(data.member.name);
       setMemberToken(data.member.token);
       setCommunity(data.community);
