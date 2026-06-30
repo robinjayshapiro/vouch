@@ -70,11 +70,6 @@ Two modes to consider:
 Needs a `display_name` column on `vouch_members` (nullable; full name used if null), and
 a setting in `SettingsPanel` for the community-wide enforcement toggle.
 
-### "My communities" on the homepage
-Landing page could list communities the visitor has already joined (read from localStorage)
-with a one-tap link back. No server call needed — tokens are stored client-side under
-`vouch_member_{CODE}`. Small addition to `LandingPage.tsx`.
-
 ---
 
 ## Minor / housekeeping
