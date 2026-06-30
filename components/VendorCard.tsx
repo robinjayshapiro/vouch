@@ -5,29 +5,59 @@ import type { VendorWithStats } from '@/types';
 import { getCategory } from '@/lib/categories';
 import { TagChips } from '@/components/Tags';
 
-// "Brett Rosenblatt" -> "Brett R."; single-word names pass through.
 function shortName(full: string): string {
-  const [first, ...rest] = full.trim().split(/\s+/);
-  return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first;
+  const parts = full.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
 }
 
-function vouchedByLine(names: string[]): string | null {
+function VoucherLine({
+  names,
+  onVoucherClick,
+}: {
+  names: string[];
+  onVoucherClick?: (fullName: string) => void;
+}) {
   if (names.length === 0) return null;
-  const shown = names.slice(0, 2).map(shortName);
-  if (names.length === 1) return `Vouched by ${shown[0]}`;
-  if (names.length === 2) return `Vouched by ${shown[0]} & ${shown[1]}`;
-  return `Vouched by ${shown[0]}, ${shown[1]} + ${names.length - 2} more`;
+  const shown = names.slice(0, 2);
+  const overflow = names.length - 2;
+  const sep = names.length === 2 ? ' & ' : ', ';
+  return (
+    <p className="mt-2 text-sm font-semibold text-navy-600">
+      {'Vouched by '}
+      {shown.map((name, i) => (
+        <span key={name}>
+          {i > 0 && sep}
+          {onVoucherClick ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onVoucherClick(name);
+              }}
+              className="underline underline-offset-2 hover:text-navy-900"
+            >
+              {shortName(name)}
+            </button>
+          ) : (
+            shortName(name)
+          )}
+        </span>
+      ))}
+      {overflow > 0 && ` + ${overflow} more`}
+    </p>
+  );
 }
 
 export default function VendorCard({
   vendor,
   code,
+  onVoucherClick,
 }: {
   vendor: VendorWithStats;
   code: string;
+  onVoucherClick?: (fullName: string) => void;
 }) {
   const category = getCategory(vendor.category);
-  const vouchedBy = vouchedByLine(vendor.voucher_names);
   return (
     <Link
       href={`/c/${code}/v/${vendor.id}`}
@@ -55,9 +85,7 @@ export default function VendorCard({
               <TagChips tags={vendor.top_tags.map((t) => t.id)} max={3} size="sm" />
             </div>
           )}
-          {vouchedBy && (
-            <p className="mt-2 text-sm font-semibold text-navy-600">{vouchedBy}</p>
-          )}
+          <VoucherLine names={vendor.voucher_names} onVoucherClick={onVoucherClick} />
           {vendor.latest_comment && (
             <p className="mt-2 line-clamp-2 text-base italic text-soft">
               “{vendor.latest_comment}”

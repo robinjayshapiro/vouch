@@ -131,7 +131,7 @@ export default function JoinGate({
         }
         throw new Error(data.error ?? 'Something went wrong.');
       }
-      storeMember(code, data.member);
+      storeMember(code, { ...data.member, communityName });
       // Gated community: the member is pending until an organizer approves.
       if (data.status === 'pending') {
         setMode('pending');
@@ -231,7 +231,7 @@ export default function JoinGate({
       }
       if (!res.ok || !data.member) throw new Error(data.error ?? 'Something went wrong.');
       // Signed in directly on this device.
-      storeMember(code, data.member);
+      storeMember(code, { ...data.member, communityName });
       onJoined(data.member);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');

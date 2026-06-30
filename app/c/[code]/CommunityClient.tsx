@@ -11,6 +11,11 @@ import ModerationPanel from './ModerationPanel';
 import AskGroupModal from './AskGroupModal';
 import SettingsPanel from './SettingsPanel';
 
+function shortName(full: string): string {
+  const parts = full.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+}
+
 export default function CommunityClient({
   community,
 }: {
@@ -34,6 +39,7 @@ export default function CommunityClient({
   const [askOpen, setAskOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [openRequests, setOpenRequests] = useState<RequestSummary[]>([]);
+  const [voucherFilter, setVoucherFilter] = useState<string | null>(null);
 
   useEffect(() => {
     setMember(getStoredMember(community.code));
@@ -93,6 +99,12 @@ export default function CommunityClient({
     return () => clearTimeout(timer);
   }, [fetchVendors, q]);
 
+  function handleVoucherClick(fullName: string) {
+    setVoucherFilter(fullName);
+    setQ('');
+    setCategory('');
+  }
+
   async function copyInvite() {
     try {
       await navigator.clipboard.writeText(
@@ -139,6 +151,11 @@ export default function CommunityClient({
           <h1 className="text-3xl font-extrabold leading-tight text-ink">
             {community.name}
           </h1>
+          {member && (
+            <span className="mt-1 shrink-0 rounded-full bg-navy-100 px-3 py-1.5 text-sm font-semibold text-navy-700">
+              {shortName(member.name)}
+            </span>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
@@ -279,28 +296,53 @@ export default function CommunityClient({
         </select>
       </div>
 
+      {voucherFilter && (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="rounded-full bg-navy-100 px-3 py-1 text-sm font-semibold text-navy-700">
+            {shortName(voucherFilter)}&apos;s vouches
+          </span>
+          <button
+            onClick={() => setVoucherFilter(null)}
+            className="text-sm text-soft hover:text-ink"
+            aria-label="Clear voucher filter"
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
       <section className="mt-4 flex flex-col gap-3" aria-live="polite">
         {loading ? (
           <p className="py-10 text-center text-lg text-soft">Loading…</p>
-        ) : vendors.length > 0 ? (
-          vendors.map((v) => (
-            <VendorCard key={v.id} vendor={v} code={community.code} />
-          ))
-        ) : (
-          <div className="rounded-3xl bg-white p-8 text-center shadow-card">
-            <p className="text-4xl" aria-hidden="true">
-              🌱
-            </p>
-            <h2 className="mt-3 text-xl font-bold text-ink">
-              {q || category ? 'No matches found' : 'No recommendations yet'}
-            </h2>
-            <p className="mt-2 text-base text-soft">
-              {q || category
-                ? 'Try a different search or category — or be the first to recommend someone!'
-                : 'Know a great plumber, sitter, or handyman? Be the first to vouch for them!'}
-            </p>
-          </div>
-        )}
+        ) : (() => {
+          const displayed = voucherFilter
+            ? vendors.filter((v) => v.voucher_names.includes(voucherFilter))
+            : vendors;
+          return displayed.length > 0 ? (
+            displayed.map((v) => (
+              <VendorCard
+                key={v.id}
+                vendor={v}
+                code={community.code}
+                onVoucherClick={handleVoucherClick}
+              />
+            ))
+          ) : (
+            <div className="rounded-3xl bg-white p-8 text-center shadow-card">
+              <p className="text-4xl" aria-hidden="true">
+                🌱
+              </p>
+              <h2 className="mt-3 text-xl font-bold text-ink">
+                {q || category || voucherFilter ? 'No matches found' : 'No recommendations yet'}
+              </h2>
+              <p className="mt-2 text-base text-soft">
+                {q || category || voucherFilter
+                  ? 'Try a different search or category — or be the first to recommend someone!'
+                  : 'Know a great plumber, sitter, or handyman? Be the first to vouch for them!'}
+              </p>
+            </div>
+          );
+        })()}
       </section>
 
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md p-4">
